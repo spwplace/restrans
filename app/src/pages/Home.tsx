@@ -15,7 +15,35 @@ import {
   Shield,
   Layers,
   GitFork,
+  Activity,
+  FlaskConical,
+  TrendingUp,
+  Cpu,
+  Rocket,
+  Target,
+  GitBranch,
 } from "lucide-react";
+
+const liveStatus = [
+  {
+    machine: "Apple M2 Max (MPS)",
+    status: "running",
+    experiment: "Synthetic proof-walk training (vectorized loss v2)",
+    detail: "Epoch 2 / 10 · 4.5M param Resonance model on lambda-calculus proof walks",
+  },
+  {
+    machine: "AMD Ryzen AI 9 HX PRO 370 (ROCm 6.2)",
+    status: "running",
+    experiment: "TinyStories language modeling baseline",
+    detail: "Epoch 2 / 20 · 4.5M param Standard transformer · val PPL 292.90 → dropping",
+  },
+  {
+    machine: "AMD (queued)",
+    status: "queued",
+    experiment: "Resonance-Text + Proof-Prior conditions",
+    detail: "Auto-queued after baseline completes (~3 hr)",
+  },
+];
 
 const highlights = [
   {
@@ -48,6 +76,45 @@ const highlights = [
   },
 ];
 
+const roadmap = [
+  {
+    phase: "Phase 0 · Now",
+    icon: FlaskConical,
+    items: [
+      "Validate proof-walk pretraining as a structural prior for language learning",
+      "Compare Standard vs Resonance on TinyStories (100K stories, 4.5M params)",
+      "Measure whether contrastive proof training accelerates downstream convergence",
+    ],
+  },
+  {
+    phase: "Phase 1 · Scale",
+    icon: TrendingUp,
+    items: [
+      "Scale to 20M–100M parameters with multi-GPU data parallelism",
+      "Train on OpenWebText or C4 subsets (1B+ tokens)",
+      "Curriculum learning: start with proof-walks → TinyStories → general web text",
+    ],
+  },
+  {
+    phase: "Phase 2 · Augment",
+    icon: Layers,
+    items: [
+      "Resonance attention in larger architectures (LLaMA-style, grouped-query, SwiGLU)",
+      "Multi-modal resonance: vision patches + text tokens sharing a phase stream",
+      "Tool-use & reasoning: proof-walk structure as an explicit chain-of-thought prior",
+    ],
+  },
+  {
+    phase: "Phase 3 · Mechanistic",
+    icon: Target,
+    items: [
+      "Intervene on phase embeddings during inference to steer structural behaviour",
+      "Quantize phase to 1–2 bit and measure reasoning degradation vs semantic",
+      "Map proof-walk embedding clusters to interpretable proof strategies",
+    ],
+  },
+];
+
 export default function Home() {
   return (
     <div className="space-y-20 pb-12">
@@ -55,14 +122,15 @@ export default function Home() {
       <section className="relative overflow-hidden bg-gradient-to-b from-primary/5 to-background pt-16 pb-12">
         <div className="container mx-auto px-4 max-w-4xl text-center space-y-6">
           <Badge variant="secondary" className="text-xs">
-            Research Paper · Dual-Stream Transformer Architecture
+            Live Research · Dual-Stream Transformer Architecture
           </Badge>
           <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold tracking-tight">
             Resonance Transformers
           </h1>
           <p className="text-xl text-muted-foreground max-w-2xl mx-auto leading-relaxed">
-            Dual-stream architectures with phase-structured attention. Every token
-            receives a <strong>semantic embedding</strong> and a{" "}
+            A <strong>living experiment</strong> in dual-stream architectures with
+            phase-structured attention. Every token receives a{" "}
+            <strong>semantic embedding</strong> and a{" "}
             <strong>phase embedding</strong>—enabling structurally similar tokens
             to attend more readily to one another.
           </p>
@@ -83,12 +151,59 @@ export default function Home() {
         </div>
       </section>
 
+      {/* Live Status */}
+      <section className="container mx-auto px-4 max-w-6xl">
+        <div className="flex items-center gap-3 mb-6">
+          <div className="p-2 bg-green-500/10 rounded-lg">
+            <Activity className="h-6 w-6 text-green-600" />
+          </div>
+          <div>
+            <h2 className="text-2xl font-bold tracking-tight">Live Experiment Status</h2>
+            <p className="text-muted-foreground text-sm">
+              Training runs in progress across two machines
+            </p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {liveStatus.map((run) => (
+            <Card
+              key={run.machine}
+              className={
+                run.status === "running"
+                  ? "border-green-500/30 bg-green-500/5"
+                  : "border-amber-500/30 bg-amber-500/5"
+              }
+            >
+              <CardHeader className="pb-2">
+                <div className="flex items-center justify-between">
+                  <Cpu className="h-5 w-5 text-primary" />
+                  <Badge
+                    variant={run.status === "running" ? "default" : "secondary"}
+                    className="text-xs"
+                  >
+                    {run.status === "running" ? "Running" : "Queued"}
+                  </Badge>
+                </div>
+                <CardTitle className="text-sm mt-2">{run.machine}</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                <p className="text-sm font-medium">{run.experiment}</p>
+                <p className="text-xs text-muted-foreground">{run.detail}</p>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </section>
+
+      <Separator className="container mx-auto px-4 max-w-6xl" />
+
       {/* Key Results */}
       <section className="container mx-auto px-4 max-w-6xl">
         <div className="text-center mb-10">
           <h2 className="text-3xl font-bold tracking-tight">Key Results</h2>
           <p className="text-muted-foreground mt-2">
-            Systematic evaluation at scales up to 5.7M parameters
+            Early findings from systematic evaluation at scales up to 5.7M parameters
           </p>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -109,6 +224,49 @@ export default function Home() {
                   <p className="text-sm text-muted-foreground leading-relaxed">
                     {h.description}
                   </p>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      </section>
+
+      <Separator className="container mx-auto px-4 max-w-6xl" />
+
+      {/* Research Roadmap */}
+      <section className="container mx-auto px-4 max-w-6xl">
+        <div className="flex items-center gap-3 mb-8">
+          <div className="p-2 bg-primary/10 rounded-lg">
+            <Rocket className="h-6 w-6 text-primary" />
+          </div>
+          <div>
+            <h2 className="text-3xl font-bold tracking-tight">Research Roadmap</h2>
+            <p className="text-muted-foreground">
+              How we scale this programme from 4M-parameter demos to serious models
+            </p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {roadmap.map((phase) => {
+            const Icon = phase.icon;
+            return (
+              <Card key={phase.phase} className="hover:shadow-md transition-shadow">
+                <CardHeader className="pb-2">
+                  <div className="flex items-center gap-2">
+                    <Icon className="h-5 w-5 text-primary" />
+                    <CardTitle className="text-base">{phase.phase}</CardTitle>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <ul className="space-y-2">
+                    {phase.items.map((item, i) => (
+                      <li key={i} className="text-sm text-muted-foreground flex gap-2">
+                        <GitBranch className="h-4 w-4 shrink-0 mt-0.5 text-primary/60" />
+                        <span>{item}</span>
+                      </li>
+                    ))}
+                  </ul>
                 </CardContent>
               </Card>
             );
@@ -156,8 +314,12 @@ uv run python resonance/train.py --mode standard --scale small
 # Synthetic proof-walk training with mutations
 uv run python resonance/train.py --mode synthetic --scale medium --mutate
 
-# Reproduce exactly
-uv run python resonance/train.py --mode resonance --scale small --seed 42`}
+# Full experiment: proof-walk prior → text fine-tuning
+uv run python resonance/experiment_text.py --condition proof_prior \
+  --epochs 20 --pretrain_epochs 10
+
+# AMD GPU (ROCm) — force gfx11 compatibility
+HSA_OVERRIDE_GFX_VERSION=11.0.0 python resonance/train.py ...`}
               </pre>
             </div>
 
@@ -173,12 +335,12 @@ uv run python resonance/train.py --mode resonance --scale small --seed 42`}
                   <span>Unified training harness with scale presets</span>
                 </li>
                 <li className="flex gap-2">
-                  <code className="bg-muted px-1.5 rounded text-xs shrink-0">resonance/resonance/data.py</code>
-                  <span>Synthetic structured dataset generator</span>
+                  <code className="bg-muted px-1.5 rounded text-xs shrink-0">resonance/experiment_text.py</code>
+                  <span>TinyStories experiment: baseline / resonance / proof-prior</span>
                 </li>
                 <li className="flex gap-2">
-                  <code className="bg-muted px-1.5 rounded text-xs shrink-0">resonance/experiments/</code>
-                  <span>Compressibility, gestalt, and perturbation analysis</span>
+                  <code className="bg-muted px-1.5 rounded text-xs shrink-0">resonance/synthetic/</code>
+                  <span>Lambda calculus generator, proof walks, mutation engine</span>
                 </li>
               </ul>
             </div>
@@ -240,37 +402,49 @@ uv run python resonance/train.py --mode resonance --scale small --seed 42`}
           </div>
           <div>
             <h2 className="text-3xl font-bold tracking-tight">For ML Scientists</h2>
-            <p className="text-muted-foreground">Architecture, methodology, and empirical findings</p>
+            <p className="text-muted-foreground">Architecture, methodology, and what we are testing right now</p>
           </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <Card className="lg:col-span-2">
             <CardHeader>
-              <CardTitle>Architecture Motivation</CardTitle>
+              <CardTitle>Current Experiment: Proof-Walk Prior</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4 text-sm text-muted-foreground leading-relaxed">
               <p>
                 Standard causal transformers collapse all token properties—semantic
                 denotation, orthographic form, phonetic structure, syntactic role—into
-                a single embedding vector. This forces an implicit coordinate system
-                that must simultaneously separate meaning from sound and structure.
+                a single embedding vector. The Resonance Transformer introduces a
+                principled split: a <strong>semantic stream</strong> for denotational
+                content and a <strong>phase stream</strong> for structural and phonetic
+                pattern.
               </p>
               <p>
-                The Resonance Transformer introduces a principled split: a{" "}
-                <strong>semantic stream</strong> for denotational content and a{" "}
-                <strong>phase stream</strong> for structural and phonetic pattern.
-                The phase stream uses a lower-dimensional space (F=32 vs D=128–256)
-                motivated by the observation that structural regularities require far
-                fewer degrees of freedom than semantic meaning.
+                Our <strong>live experiment</strong> tests whether pre-training on
+                synthetic <strong>lambda-calculus proof-walks</strong> (with contrastive
+                group objectives) creates a useful structural prior for natural-language
+                learning. We compare three conditions:
               </p>
+              <ol className="list-decimal list-inside space-y-1">
+                <li>
+                  <strong>Baseline</strong> — Standard transformer trained from scratch on{" "}
+                  <em>TinyStories</em>.
+                </li>
+                <li>
+                  <strong>Resonance</strong> — Dual-stream transformer trained from scratch
+                  on <em>TinyStories</em>.
+                </li>
+                <li>
+                  <strong>Proof-Prior</strong> — Pre-train 10 epochs on proof-walks
+                  (contrastive + LM), then fine-tune 20 epochs on <em>TinyStories</em>.
+                </li>
+              </ol>
               <p>
-                A <strong>learnable per-dimension blend</strong> (sigmoid-gated
-                interpolation) replaces hard orthogonality constraints, allowing the
-                model to adaptively re-weight each stream. The{" "}
-                <strong>resonance matrix</strong>—pairwise phase cosine
-                similarities—biases attention scores additively, enabling structurally
-                similar tokens to attend more strongly regardless of semantic content.
+                If the proof-prior condition converges faster or reaches lower
+                perplexity, it suggests that structured synthetic reasoning tasks can
+                serve as a useful pre-training signal for language models—analogous to
+                how chess or Go pre-training has been explored for reasoning.
               </p>
             </CardContent>
           </Card>
@@ -337,7 +511,7 @@ uv run python resonance/train.py --mode resonance --scale small --seed 42`}
             <h2 className="text-3xl font-bold tracking-tight">
               For AI Devs & Agent Wranglers
             </h2>
-            <p className="text-muted-foreground">How this project went, what worked, and what didn't</p>
+            <p className="text-muted-foreground">How this project is going, what worked, and what didn't</p>
           </div>
         </div>
 
@@ -361,10 +535,10 @@ uv run python resonance/train.py --mode resonance --scale small --seed 42`}
                 generator with contrastive training.
               </p>
               <p>
-                The paper was written incrementally, with each section drafted after
-                its corresponding experiments completed. Figures and tables were
-                generated automatically from experiment outputs to avoid manual
-                copy-paste errors.
+                We are now running the first <strong>natural-language transfer
+                experiment</strong>: testing whether proof-walk pretraining acts as a
+                useful structural prior for learning English from the TinyStories
+                dataset.
               </p>
             </CardContent>
           </Card>
@@ -375,31 +549,31 @@ uv run python resonance/train.py --mode resonance --scale small --seed 42`}
             </CardHeader>
             <CardContent className="space-y-3 text-sm text-muted-foreground leading-relaxed">
               <p>
-                <strong>Undertraining is the biggest caveat.</strong> All models ran
+                <strong>Undertraining is the biggest caveat.</strong> Early models ran
                 for only 2–5 epochs on CPU. Absolute perplexities are high (~4,800)
-                because nothing is converged. The results are meaningful for
-                <em> relative</em> comparisons and <em>structural properties</em> of
+                because nothing is converged. The results are meaningful for{" "}
+                <em>relative</em> comparisons and <em>structural properties</em> of
                 representations, but not for absolute language modeling performance.
+                We are now scaling to 20 epochs on GPU.
               </p>
               <p>
-                <strong>Synthetic data transfer is unproven.</strong> The lambda
-                calculus proof walks are an interesting pretraining signal, but we
-                never validated transfer to natural language. The phonetic
-                initialization also has no meaningful correlate in lambda-term tokens,
-                so the phase embeddings must learn structure entirely from the
-                synthetic distribution.
+                <strong>Vectorization matters enormously.</strong> The first
+                contrastive-loss implementation used Python for-loops over positive
+                and negative pairs. Replacing it with a fully vectorized InfoNCE
+                operation sped training up by ~100×. Always profile your loss
+                functions.
               </p>
               <p>
-                <strong>Single-run variance is real.</strong> Every number comes from
-                one training run. At small scales, training noise can easily swamp
-                architectural differences. We report the numbers honestly, but
-                confidence intervals would require repeated runs.
+                <strong>ROCm on AMD APUs is possible but fragile.</strong> The Radeon
+                890M is not officially supported, but forcing{" "}
+                <code>HSA_OVERRIDE_GFX_VERSION=11.0.0</code> lets PyTorch use the
+                gfx1100 kernel libraries. Performance is solid (~11 min/epoch for a
+                4.5M-param model on TinyStories).
               </p>
               <p>
-                <strong>GitHub Pages + SPA routing.</strong> This very website was a
-                lesson in HashRouter versus BrowserRouter. Deploying a React SPA to a
-                project page subdirectory requires either HashRouter or careful
-                basename handling. We went with HashRouter for simplicity.
+                <strong>Synthetic data transfer is the open question.</strong> We are
+                actively testing whether lambda-calculus proof-walks create a useful
+                prior for natural language. Results expected within hours.
               </p>
             </CardContent>
           </Card>
@@ -435,7 +609,8 @@ uv run python resonance/train.py --mode resonance --scale small --seed 42`}
             <CardContent className="space-y-3 text-sm text-muted-foreground leading-relaxed">
               <p>
                 <strong>Research:</strong> PyTorch, NumPy, Matplotlib, scikit-learn for
-                PCA and effective rank. MPS auto-detection for Apple Silicon training.
+                PCA and effective rank. MPS auto-detection for Apple Silicon; ROCm 6.2
+                with gfx11 override for AMD APUs.
               </p>
               <p>
                 <strong>Experiments:</strong> Four analysis scripts
