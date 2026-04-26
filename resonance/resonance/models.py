@@ -10,6 +10,38 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from .config import ResonanceConfig, StandardConfig
+from .kernels import build_kernel
+from .phase_embeddings import build_phase_embedding
+from .bias_modes import build_bias_mode
+
+
+# ---------------------------------------------------------------------------
+# Initialization presets
+# ---------------------------------------------------------------------------
+
+def _preset_values(
+    config: ResonanceConfig,
+    preset_name: str | None = None,
+) -> tuple[float, float, float, bool, bool]:
+    """Return (phase_init_std, resonance_attn_weight, resonance_blend,
+    normalize_resonance, center_resonance) based on preset."""
+    preset = preset_name or config.init_preset
+    presets: dict[str, tuple[float, float, float, bool, bool]] = {
+        "default":     (0.3, 0.1, 0.3, False, False),
+        "wide":        (1.0, 0.3, 0.3, False, False),
+        "strong":      (1.2, 1.0, 0.5, False, False),
+        "very_strong": (2.0, 2.0, 0.5, False, False),
+        "normalized":  (0.3, 0.1, 0.3, True,  False),
+    }
+    if preset in presets:
+        return presets[preset]
+    return (
+        config.phase_init_std,
+        config.resonance_attn_weight,
+        config.resonance_blend,
+        config.normalize_resonance,
+        config.center_resonance,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -154,6 +186,7 @@ class StandardTransformer(nn.Module):
         self,
         input_ids: torch.Tensor,
         labels: torch.Tensor | None = None,
+        return_hidden: bool = False,
     ) -> dict[str, Any]:
         """Forward pass and optional next-token loss computation.
 
@@ -180,9 +213,12 @@ class StandardTransformer(nn.Module):
         for block in self.blocks:
             x = block(x, mask)
 
-        logits = self.lm_head(self.ln_final(x))
+        hidden = self.ln_final(x)
+        logits = self.lm_head(hidden)
 
         result: dict[str, Any] = {"logits": logits}
+        if return_hidden:
+            result["hidden_states"] = hidden
         if labels is not None:
             # Shift so that each position predicts the next token
             result["loss"] = F.cross_entropy(
@@ -218,21 +254,47 @@ class ResonanceEmbedding(nn.Module):
         super().__init__()
         self.config = config
 
+        # Apply initialization preset
+        phase_init_std, attn_weight, blend, norm_res, center_res = _preset_values(config)
+
         # Semantic embedding (standard)
         self.semantic = nn.Embedding(config.vocab_size, config.embed_dim)
 
-        # Phase embedding (structural / phonetic)
-        self.phase = nn.Embedding(config.vocab_size, config.n_frequencies)
+        # Phase embedding (structural / phonetic) — modular, swappable
+        self.phase = build_phase_embedding(
+            config.phase_embedding,
+            config.vocab_size,
+            config.n_frequencies,
+            init_std=phase_init_std,
+            rank=config.phase_embedding_rank,
+            n_scales=config.phase_embedding_scales,
+        )
         self.phase_proj = nn.Linear(config.n_frequencies, config.embed_dim, bias=False)
 
         # Learnable blend parameter (per-dimension interpolation)
         self.blend = nn.Parameter(
-            torch.full((config.embed_dim,), config.resonance_blend)
+            torch.full((config.embed_dim,), blend)
         )
 
         # Positional encoding
         self.position = nn.Embedding(config.max_seq_len, config.embed_dim)
         self.dropout = nn.Dropout(config.dropout)
+
+        # Resonance kernel (modular, swappable)
+        self.kernel = build_kernel(
+            config.resonance_kernel,
+            config.n_frequencies,
+            gamma=config.kernel_gamma,
+            learnable_gamma=config.kernel_learnable_gamma,
+            rank=config.kernel_rank,
+            temperature=config.kernel_temperature,
+        )
+
+        # Store effective init values for attention module
+        self._effective_phase_init_std = phase_init_std
+        self._effective_attn_weight = attn_weight
+        self._effective_normalize = norm_res
+        self._effective_center = center_res
 
         # Initialise
         self._init_weights()
@@ -249,15 +311,23 @@ class ResonanceEmbedding(nn.Module):
 
     def _init_random_phases(self) -> None:
         """Initialise phase embeddings from a Gaussian distribution."""
-        nn.init.normal_(self.phase.weight, std=self.config.phase_init_std)
+        # Only applies to learned phase embeddings with explicit weight/angle params
+        from .phase_embeddings import RealPhaseEmbedding, ComplexAnglePhaseEmbedding
+        if isinstance(self.phase, RealPhaseEmbedding):
+            nn.init.normal_(self.phase.weight, std=self.config.phase_init_std)
+        elif isinstance(self.phase, ComplexAnglePhaseEmbedding):
+            nn.init.normal_(self.phase.angle, std=self.config.phase_init_std)
+        # FourierFixed and Hierarchical handle their own init
 
     def _init_phonetic_phases(self, rhyme_index: dict[str, Any]) -> None:
         """Initialise phase embeddings so rhyming words are close in phase space.
 
-        Each rhyme group receives a shared base phase vector; tokens in the
-        group are perturbed by a small amount of Gaussian noise so they are
-        similar but not identical.
+        Only supported for ``real`` phase embeddings currently.
         """
+        from .phase_embeddings import RealPhaseEmbedding
+        if not isinstance(self.phase, RealPhaseEmbedding):
+            return  # Skip for non-real phase embeddings
+
         rhyme_to_tokens: dict[str, list[int]] = rhyme_index.get("rhyme_to_tokens", {})
 
         # Assign a base phase vector to each rhyme group
@@ -280,27 +350,31 @@ class ResonanceEmbedding(nn.Module):
 
         self.phonetic_count = phonetic_count
 
-    def get_resonance_matrix(self, token_ids: torch.Tensor) -> torch.Tensor:
-        """Compute pairwise resonance scores from phase similarity.
-
-        The resonance between two tokens is defined as the mean cosine of
-        their phase differences across all frequency dimensions.
+    def get_phases(self, token_ids: torch.Tensor) -> torch.Tensor:
+        """Return raw phase embeddings for per-layer kernel overrides.
 
         Args:
             token_ids: Integer token ids ``(batch, seq_len)``.
 
         Returns:
-            Resonance matrix ``(batch, seq_len, seq_len)`` with values in
-            ``[-1, 1]``.
+            Phase tensor ``(batch, seq_len, n_frequencies)``.
+        """
+        return self.phase(token_ids)
+
+    def get_resonance_matrix(self, token_ids: torch.Tensor) -> torch.Tensor:
+        """Compute pairwise resonance scores via the configured kernel.
+
+        Args:
+            token_ids: Integer token ids ``(batch, seq_len)``.
+
+        Returns:
+            Resonance matrix ``(batch, seq_len, seq_len)``.
         """
         if not (self.config.use_phase_stream or self.config.use_resonance_bias):
             batch_size, seq_len = token_ids.shape
             return torch.zeros(batch_size, seq_len, seq_len, device=token_ids.device)
         phases = self.phase(token_ids)
-        # Broadcast: (B, S, 1, F) - (B, 1, S, F) -> (B, S, S, F)
-        phase_diff = phases.unsqueeze(2) - phases.unsqueeze(1)
-        resonance = torch.cos(phase_diff).mean(dim=-1)
-        return resonance
+        return self.kernel(phases)
 
     def forward(
         self, token_ids: torch.Tensor
@@ -344,19 +418,64 @@ class ResonanceAttention(nn.Module):
     scores.  The per-head weighting of this bias is learnable.
     """
 
-    def __init__(self, config: ResonanceConfig) -> None:
+    def __init__(
+        self,
+        config: ResonanceConfig,
+        bias_mode: Any | None = None,
+        preset: str | None = None,
+    ) -> None:
         super().__init__()
         self.config = config
         self.n_heads = config.n_heads
         self.head_dim = config.embed_dim // config.n_heads
         self.scale = self.head_dim**-0.5
 
+        # Apply preset for effective attention weight
+        _, attn_weight, _, norm_res, center_res = _preset_values(config, preset)
+        self._effective_normalize = norm_res
+        self._effective_center = center_res
+
         self.qkv = nn.Linear(config.embed_dim, 3 * config.embed_dim, bias=False)
         self.out_proj = nn.Linear(config.embed_dim, config.embed_dim, bias=False)
         self.resonance_weight = nn.Parameter(
-            torch.full((config.n_heads,), config.resonance_attn_weight)
+            torch.full((config.n_heads,), attn_weight)
         )
         self.dropout = nn.Dropout(config.dropout)
+
+        # Bias application mode (modular, swappable)
+        if bias_mode is not None:
+            self.bias_mode = bias_mode
+        else:
+            self.bias_mode = build_bias_mode(
+                config.bias_mode,
+                n_heads=config.n_heads,
+                gate_init=config.bias_gate_init,
+            )
+
+    def _prepare_resonance_bias(
+        self,
+        resonance: torch.Tensor,
+        mask: torch.Tensor | None,
+    ) -> torch.Tensor:
+        if not (self._effective_center or self._effective_normalize):
+            return resonance
+        if mask is None:
+            centered = resonance - resonance.mean(dim=-1, keepdim=True)
+            if not self._effective_normalize:
+                return centered
+            std = (centered**2).mean(dim=-1, keepdim=True).clamp(min=1e-8).sqrt()
+            return centered / std
+        allowed = mask.to(device=resonance.device, dtype=resonance.dtype)
+        while allowed.dim() > resonance.dim():
+            allowed = allowed.squeeze(0)
+        denom = allowed.sum(dim=-1, keepdim=True).clamp(min=1.0)
+        mean = (resonance * allowed).sum(dim=-1, keepdim=True) / denom
+        centered = (resonance - mean) * allowed
+        if not self._effective_normalize:
+            return centered
+        variance = ((centered**2) * allowed).sum(dim=-1, keepdim=True) / denom
+        std = variance.clamp(min=1e-8).sqrt()
+        return (centered / std) * allowed
 
     def forward(
         self,
@@ -385,11 +504,13 @@ class ResonanceAttention(nn.Module):
         q, k, v = qkv[0], qkv[1], qkv[2]
 
         attn = torch.matmul(q, k.transpose(-2, -1)) * self.scale
-        # Add resonance bias: broadcast across heads with per-head weights
+        # Apply resonance bias via modular bias mode
         if self.config.use_resonance_bias:
-            attn = attn + resonance.unsqueeze(1) * self.resonance_weight.view(
+            resonance_bias = self._prepare_resonance_bias(resonance, mask)
+            resonance_bias = resonance_bias.unsqueeze(1) * self.resonance_weight.view(
                 1, self.n_heads, 1, 1
             )
+            attn = self.bias_mode(attn, resonance_bias, mask)
 
         if mask is not None:
             attn = attn.masked_fill(mask == 0, float("-inf"))
@@ -409,10 +530,16 @@ class ResonanceBlock(nn.Module):
     *resonance* matrix as an additional input.
     """
 
-    def __init__(self, config: ResonanceConfig) -> None:
+    def __init__(
+        self,
+        config: ResonanceConfig,
+        kernel: Any | None = None,
+        bias_mode: Any | None = None,
+        preset: str | None = None,
+    ) -> None:
         super().__init__()
         self.ln1 = nn.LayerNorm(config.embed_dim)
-        self.attn = ResonanceAttention(config)
+        self.attn = ResonanceAttention(config, bias_mode=bias_mode, preset=preset)
         self.ln2 = nn.LayerNorm(config.embed_dim)
         self.ff = nn.Sequential(
             nn.Linear(config.embed_dim, config.ff_dim),
@@ -420,12 +547,14 @@ class ResonanceBlock(nn.Module):
             nn.Linear(config.ff_dim, config.embed_dim),
             nn.Dropout(config.dropout),
         )
+        self.kernel = kernel  # Optional per-layer kernel override
 
     def forward(
         self,
         x: torch.Tensor,
         resonance: torch.Tensor,
         mask: torch.Tensor | None = None,
+        phases: torch.Tensor | None = None,
     ) -> torch.Tensor:
         """Forward pass through one resonance transformer block.
 
@@ -433,10 +562,14 @@ class ResonanceBlock(nn.Module):
             x: Input tensor ``(batch, seq_len, embed_dim)``.
             resonance: Pairwise resonance matrix ``(batch, seq_len, seq_len)``.
             mask: Optional causal attention mask.
+            phases: Optional phase embeddings ``(batch, seq_len, n_frequencies)``.
+                Required when this block has a per-layer kernel override.
 
         Returns:
             Updated tensor of the same shape.
         """
+        if self.kernel is not None and phases is not None:
+            resonance = self.kernel(phases)
         x = x + self.attn(self.ln1(x), resonance, mask)
         x = x + self.ff(self.ln2(x))
         return x
@@ -455,14 +588,44 @@ class ResonanceTransformer(nn.Module):
         self,
         config: ResonanceConfig,
         rhyme_index: dict[str, Any] | None = None,
+        layer_configs: Any | None = None,
     ) -> None:
         super().__init__()
         self.config = config
 
         self.embedding = ResonanceEmbedding(config, rhyme_index)
-        self.blocks = nn.ModuleList(
-            [ResonanceBlock(config) for _ in range(config.n_layers)]
-        )
+
+        blocks: list[ResonanceBlock] = []
+        for i in range(config.n_layers):
+            kwargs: dict[str, Any] = {}
+            if layer_configs is not None:
+                from .layer_config import LayerConfigRegistry
+
+                lc = layer_configs.get_config(i, config.n_layers)
+                if lc is not None:
+                    n_freq = (
+                        lc.n_frequencies
+                        if lc.n_frequencies is not None
+                        else config.n_frequencies
+                    )
+                    kwargs["kernel"] = build_kernel(
+                        lc.kernel,
+                        n_freq,
+                        gamma=config.kernel_gamma,
+                        learnable_gamma=config.kernel_learnable_gamma,
+                        rank=config.kernel_rank,
+                        temperature=config.kernel_temperature,
+                    )
+                    kwargs["bias_mode"] = build_bias_mode(
+                        lc.bias_mode,
+                        n_heads=config.n_heads,
+                        gate_init=config.bias_gate_init,
+                    )
+                    if lc.preset is not None:
+                        kwargs["preset"] = lc.preset
+            blocks.append(ResonanceBlock(config, **kwargs))
+
+        self.blocks = nn.ModuleList(blocks)
 
         self.ln_final = nn.LayerNorm(config.embed_dim)
         self.lm_head = nn.Linear(config.embed_dim, config.vocab_size, bias=False)
@@ -490,6 +653,7 @@ class ResonanceTransformer(nn.Module):
         self,
         input_ids: torch.Tensor,
         labels: torch.Tensor | None = None,
+        return_hidden: bool = False,
     ) -> dict[str, Any]:
         """Forward pass and optional next-token loss computation.
 
@@ -503,14 +667,18 @@ class ResonanceTransformer(nn.Module):
         batch_size, seq_len = input_ids.shape
 
         x, resonance = self.embedding(input_ids)
+        phases = self.embedding.get_phases(input_ids)
         mask = self.causal_mask[:seq_len, :seq_len].unsqueeze(0)
 
         for block in self.blocks:
-            x = block(x, resonance, mask)
+            x = block(x, resonance, mask, phases)
 
-        logits = self.lm_head(self.ln_final(x))
+        hidden = self.ln_final(x)
+        logits = self.lm_head(hidden)
 
         result: dict[str, Any] = {"logits": logits}
+        if return_hidden:
+            result["hidden_states"] = hidden
         if labels is not None:
             result["loss"] = F.cross_entropy(
                 logits[:, :-1, :].contiguous().view(-1, self.config.vocab_size),

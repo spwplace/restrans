@@ -27,6 +27,7 @@ from .common import (
     SwiGLU,
     MoELayer,
     ModernResonanceEmbedding,
+    get_preset_values,
     make_causal_mask,
 )
 
@@ -70,6 +71,10 @@ class Qwen3_5Config:
     # Resonance options
     use_resonance: bool = False
     n_frequencies: int = 32
+    resonance_kernel: str = "cosine"
+    phase_embedding: str = "real"
+    bias_mode: str = "additive"
+    init_preset: str = "default"
     linear_resonance_mode: str = "gate"  # "gate", "skip", or "state"
 
 
@@ -413,7 +418,8 @@ class ResonantQwen3_5FullAttention(nn.Module):
         self.dropout = nn.Dropout(config.dropout)
 
         # Resonance bias weight (one scalar per head)
-        self.resonance_weight = nn.Parameter(torch.full((config.n_heads,), 0.1))
+        _, attn_weight = get_preset_values(config.init_preset)
+        self.resonance_weight = nn.Parameter(torch.full((config.n_heads,), attn_weight))
 
     def forward(
         self,
@@ -800,6 +806,9 @@ class ResonantQwen3_5(nn.Module):
             n_frequencies=self.config.n_frequencies,
             max_seq_len=self.config.max_seq_len,
             dropout=self.config.dropout,
+            phase_embedding_type=self.config.phase_embedding,
+            resonance_kernel=self.config.resonance_kernel,
+            init_preset=self.config.init_preset,
         )
 
         self.blocks = nn.ModuleList(
@@ -875,6 +884,9 @@ class ResonantQwen3_5MoE(nn.Module):
             n_frequencies=self.config.n_frequencies,
             max_seq_len=self.config.max_seq_len,
             dropout=self.config.dropout,
+            phase_embedding_type=self.config.phase_embedding,
+            resonance_kernel=self.config.resonance_kernel,
+            init_preset=self.config.init_preset,
         )
 
         self.blocks = nn.ModuleList(

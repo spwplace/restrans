@@ -64,6 +64,10 @@ class LlamaConfig:
     # Resonance options
     use_resonance: bool = False
     n_frequencies: int = 32
+    resonance_kernel: str = "cosine"
+    phase_embedding: str = "real"
+    bias_mode: str = "additive"
+    init_preset: str = "default"
 
 
 # ---------------------------------------------------------------------------
@@ -223,6 +227,8 @@ class _ResonantLlamaDenseLayer(nn.Module):
             n_kv_heads=config.n_kv_heads,
             dropout=config.dropout,
             use_resonance=True,
+            bias_mode=config.bias_mode,
+            init_preset=config.init_preset,
             rope=RoPE(
                 config.embed_dim // config.n_heads,
                 config.max_seq_len,
@@ -261,6 +267,8 @@ class _ResonantLlamaMoEDecoderLayer(nn.Module):
             n_kv_heads=config.n_kv_heads,
             dropout=config.dropout,
             use_resonance=True,
+            bias_mode=config.bias_mode,
+            init_preset=config.init_preset,
             rope=RoPE(
                 config.embed_dim // config.n_heads,
                 config.max_seq_len,
@@ -406,6 +414,9 @@ class ResonantLlama(nn.Module):
             n_frequencies=config.n_frequencies,
             max_seq_len=config.max_seq_len,
             dropout=config.dropout,
+            phase_embedding_type=config.phase_embedding,
+            resonance_kernel=config.resonance_kernel,
+            init_preset=config.init_preset,
         )
         self.layers = nn.ModuleList()
         for i in range(config.n_layers):
@@ -453,6 +464,9 @@ class ResonantLlamaMoE(nn.Module):
             n_frequencies=config.n_frequencies,
             max_seq_len=config.max_seq_len,
             dropout=config.dropout,
+            phase_embedding_type=config.phase_embedding,
+            resonance_kernel=config.resonance_kernel,
+            init_preset=config.init_preset,
         )
         self.layers = nn.ModuleList()
         for i in range(config.n_layers):

@@ -37,7 +37,7 @@ from .common import (
     GELUAndMul,
     Gemma4MLP,
     ModernResonanceEmbedding,
-    ResonanceBiasAttention,
+    get_preset_values,
     make_causal_mask,
     MoELayer,
 )
@@ -85,6 +85,10 @@ class Gemma4Config:
     # Resonance
     use_resonance: bool = False
     n_frequencies: int = 32
+    resonance_kernel: str = "cosine"
+    phase_embedding: str = "real"
+    bias_mode: str = "additive"
+    init_preset: str = "default"
 
 
 # ---------------------------------------------------------------------------
@@ -139,6 +143,13 @@ class Gemma4Attention(nn.Module):
                         self.kv_share_source_idx = i
                         break
 
+        # Resonance weight
+        if config.use_resonance:
+            _, attn_weight = get_preset_values(config.init_preset)
+            self.resonance_weight = nn.Parameter(torch.full((config.n_heads,), attn_weight))
+        else:
+            self.resonance_weight = None
+
         # Soft-capping
         self.attn_logits_soft_cap = config.attn_logits_soft_cap
 
@@ -192,7 +203,10 @@ class Gemma4Attention(nn.Module):
 
         # Resonance bias
         if resonance is not None:
-            attn = attn + resonance.unsqueeze(1)
+            if self.resonance_weight is not None:
+                attn = attn + resonance.unsqueeze(1) * self.resonance_weight.view(1, self.n_heads, 1, 1)
+            else:
+                attn = attn + resonance.unsqueeze(1)
 
         # Soft-capping
         if self.attn_logits_soft_cap is not None:
@@ -517,11 +531,14 @@ class ResonantGemma4(nn.Module):
             ]
 
         self.embedding = ModernResonanceEmbedding(
-            config.vocab_size,
-            config.embed_dim,
-            config.n_frequencies,
-            config.max_seq_len,
-            config.dropout,
+            vocab_size=config.vocab_size,
+            embed_dim=config.embed_dim,
+            n_frequencies=config.n_frequencies,
+            max_seq_len=config.max_seq_len,
+            dropout=config.dropout,
+            phase_embedding_type=config.phase_embedding,
+            resonance_kernel=config.resonance_kernel,
+            init_preset=config.init_preset,
         )
         self.register_buffer("normalizer", torch.tensor(config.embed_dim ** 0.5), persistent=False)
 

@@ -21,6 +21,10 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from ..kernels import build_kernel
+from ..phase_embeddings import build_phase_embedding
+from ..bias_modes import build_bias_mode
+
 
 # ---------------------------------------------------------------------------
 # Normalization
@@ -246,6 +250,24 @@ class MoELayer(nn.Module):
 
 
 # ---------------------------------------------------------------------------
+# Initialization presets
+# ---------------------------------------------------------------------------
+
+_PRESET_VALUES: dict[str, tuple[float, float]] = {
+    "default":     (0.3, 0.1),
+    "wide":        (1.0, 0.3),
+    "strong":      (1.2, 1.0),
+    "very_strong": (2.0, 2.0),
+    "normalized":  (0.3, 0.1),
+}
+
+
+def get_preset_values(preset: str) -> tuple[float, float]:
+    """Return (phase_init_std, resonance_weight) for a given preset."""
+    return _PRESET_VALUES.get(preset, (0.3, 0.1))
+
+
+# ---------------------------------------------------------------------------
 # Resonance utilities for modern architectures
 # ---------------------------------------------------------------------------
 
@@ -254,6 +276,9 @@ class ModernResonanceEmbedding(nn.Module):
 
     Can be dropped into any architecture that expects a standard
     nn.Embedding-like interface plus a resonance matrix.
+
+    Supports swappable phase embeddings and resonance kernels via
+    the modular registries.
     """
 
     def __init__(
@@ -263,32 +288,51 @@ class ModernResonanceEmbedding(nn.Module):
         n_frequencies: int = 32,
         max_seq_len: int = 2048,
         dropout: float = 0.0,
+        phase_embedding_type: str = "real",
+        resonance_kernel: str = "cosine",
+        kernel_gamma: float = 1.0,
+        kernel_rank: int | None = None,
+        init_preset: str = "default",
     ) -> None:
         super().__init__()
         self.vocab_size = vocab_size
         self.embed_dim = embed_dim
         self.n_frequencies = n_frequencies
+        self.resonance_kernel = resonance_kernel
+
+        phase_init_std, _ = get_preset_values(init_preset)
 
         self.semantic = nn.Embedding(vocab_size, embed_dim)
-        self.phase = nn.Embedding(vocab_size, n_frequencies)
+        self.phase = build_phase_embedding(
+            phase_embedding_type, vocab_size, n_frequencies, init_std=phase_init_std
+        )
         self.phase_proj = nn.Linear(n_frequencies, embed_dim, bias=False)
         self.blend = nn.Parameter(torch.full((embed_dim,), 0.3))
         self.position = nn.Embedding(max_seq_len, embed_dim)
         self.dropout = nn.Dropout(dropout)
 
+        self.kernel = build_kernel(
+            resonance_kernel, n_frequencies, gamma=kernel_gamma, rank=kernel_rank
+        )
+
         self._init_weights()
 
     def _init_weights(self) -> None:
         nn.init.normal_(self.semantic.weight, std=0.02)
-        nn.init.normal_(self.phase.weight, std=0.3)
         nn.init.normal_(self.phase_proj.weight, std=0.02)
         nn.init.normal_(self.position.weight, std=0.02)
 
     def get_resonance_matrix(self, token_ids: torch.Tensor) -> torch.Tensor:
-        """Compute pairwise resonance scores R[i,j] = mean_f cos(phi_i - phi_j)."""
-        phases = self.phase(token_ids)  # [B, S, F]
-        phase_diff = phases.unsqueeze(2) - phases.unsqueeze(1)  # [B, S, S, F]
-        return torch.cos(phase_diff).mean(dim=-1)  # [B, S, S]
+        """Compute pairwise resonance via the configured kernel."""
+        from ..phase_embeddings import ComplexAnglePhaseEmbedding
+        if (
+            self.resonance_kernel in ("complex_magnitude", "complex_real")
+            and isinstance(self.phase, ComplexAnglePhaseEmbedding)
+        ):
+            phases = self.phase.to_complex(token_ids)  # [B, S, F] complex
+        else:
+            phases = self.phase(token_ids)  # [B, S, F]
+        return self.kernel(phases)  # [B, S, S]
 
     def forward(self, token_ids: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         """Returns (embeddings, resonance_matrix)."""
@@ -312,6 +356,8 @@ class ResonanceBiasAttention(nn.Module):
     accepts an optional resonance matrix and adds it to attention logits.
     When ``rope`` is provided, rotary position embeddings are applied to
     Q and K before the attention matmul (LLaMA-style).
+
+    Supports swappable bias application modes via the bias mode registry.
     """
 
     def __init__(
@@ -322,6 +368,8 @@ class ResonanceBiasAttention(nn.Module):
         dropout: float = 0.0,
         use_resonance: bool = True,
         rope: RoPE | None = None,
+        bias_mode: str = "additive",
+        init_preset: str = "default",
     ) -> None:
         super().__init__()
         self.n_heads = n_heads
@@ -339,7 +387,11 @@ class ResonanceBiasAttention(nn.Module):
         self.dropout = nn.Dropout(dropout)
 
         if use_resonance:
-            self.resonance_weight = nn.Parameter(torch.full((n_heads,), 0.1))
+            _, attn_weight = get_preset_values(init_preset)
+            self.resonance_weight = nn.Parameter(torch.full((n_heads,), attn_weight))
+            self.bias_mode = build_bias_mode(bias_mode, n_heads=n_heads)
+        else:
+            self.bias_mode = None
 
     def forward(
         self,
@@ -365,9 +417,10 @@ class ResonanceBiasAttention(nn.Module):
 
         attn = torch.matmul(q, k.transpose(-2, -1)) * self.scale
 
-        if self.use_resonance and resonance is not None:
+        if self.use_resonance and resonance is not None and self.bias_mode is not None:
             # resonance: [B, S, S] → broadcast to [B, n_heads, S, S]
-            attn = attn + resonance.unsqueeze(1) * self.resonance_weight.view(1, self.n_heads, 1, 1)
+            resonance_bias = resonance.unsqueeze(1) * self.resonance_weight.view(1, self.n_heads, 1, 1)
+            attn = self.bias_mode(attn, resonance_bias, mask)
 
         if mask is not None:
             attn = attn.masked_fill(mask == 0, float("-inf"))

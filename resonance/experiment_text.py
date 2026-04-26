@@ -309,6 +309,12 @@ def get_args() -> argparse.Namespace:
         default=None,
         help="Model architecture (overrides --condition default)",
     )
+    # Resonance variant flags
+    parser.add_argument("--resonance_kernel", default="cosine", help="Resonance kernel name")
+    parser.add_argument("--phase_embedding", default="real", help="Phase embedding variant")
+    parser.add_argument("--bias_mode", default="additive", help="Resonance bias application mode")
+    parser.add_argument("--init_preset", default="default", choices=["default", "wide", "strong", "very_strong", "normalized"], help="Initialization preset")
+    parser.add_argument("--n_frequencies", type=int, default=32, help="Number of phase frequencies")
     parser.add_argument("--max_seq_len", type=int, default=None, help="Override max sequence length")
     return parser.parse_args()
 
@@ -407,9 +413,13 @@ def main() -> None:
         config = ResonanceConfig(
             vocab_size=actual_vocab, max_seq_len=max_seq_len, embed_dim=args.embed_dim,
             n_layers=args.n_layers, n_heads=args.n_heads, ff_dim=args.ff_dim,
-            n_frequencies=32, batch_size=args.batch_size, learning_rate=3e-4,
+            n_frequencies=args.n_frequencies, batch_size=args.batch_size, learning_rate=3e-4,
             phonetic_init=False, use_phase_stream=args.use_phase_stream,
             use_resonance_bias=args.use_resonance_bias,
+            resonance_kernel=args.resonance_kernel,
+            phase_embedding=args.phase_embedding,
+            bias_mode=args.bias_mode,
+            init_preset=args.init_preset,
         )
         model = ResonanceTransformer(config)
     # Modern architectures
@@ -419,6 +429,9 @@ def main() -> None:
             vocab_size=actual_vocab, max_seq_len=max_seq_len, embed_dim=args.embed_dim,
             n_layers=args.n_layers, n_heads=args.n_heads, n_kv_heads=args.n_heads // 2,
             ff_dim=args.ff_dim, use_moe="moe" in arch, use_resonance="resonant" in arch,
+            n_frequencies=args.n_frequencies, resonance_kernel=args.resonance_kernel,
+            phase_embedding=args.phase_embedding, bias_mode=args.bias_mode,
+            init_preset=args.init_preset,
         )
         model = {
             "llama": LlamaTransformer, "llama_moe": LlamaMoE,
@@ -430,6 +443,9 @@ def main() -> None:
             vocab_size=actual_vocab, max_seq_len=max_seq_len, embed_dim=args.embed_dim,
             n_layers=args.n_layers, n_heads=args.n_heads, n_kv_heads=args.n_heads // 2,
             ff_dim=args.ff_dim, use_moe="moe" in arch, use_resonance="resonant" in arch,
+            n_frequencies=args.n_frequencies, resonance_kernel=args.resonance_kernel,
+            phase_embedding=args.phase_embedding, bias_mode=args.bias_mode,
+            init_preset=args.init_preset,
         )
         model = {
             "qwen3_5": Qwen3_5Transformer, "qwen3_5_moe": Qwen3_5MoE,
@@ -442,6 +458,9 @@ def main() -> None:
             n_layers=args.n_layers, n_heads=args.n_heads, n_kv_heads=args.n_heads // 2,
             ff_dim=args.ff_dim, use_moe="moe" in arch, use_resonance="resonant" in arch,
             use_ple=False,  # disable PLE for small-scale experiments
+            n_frequencies=args.n_frequencies, resonance_kernel=args.resonance_kernel,
+            phase_embedding=args.phase_embedding, bias_mode=args.bias_mode,
+            init_preset=args.init_preset,
         )
         model = {
             "gemma4": Gemma4Transformer, "gemma4_moe": Gemma4MoE,

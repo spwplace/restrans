@@ -1,126 +1,127 @@
-import { Link } from "react-router";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import {
-  BookOpen,
-  Image,
-  Download,
+  Github,
   Code2,
   Brain,
-  Bot,
-  ArrowRight,
-  Zap,
-  Shield,
   Layers,
   GitFork,
-  Activity,
   FlaskConical,
-  TrendingUp,
   Cpu,
-  Rocket,
+  Zap,
   Target,
   GitBranch,
+  Microscope,
+  Puzzle,
+  TestTube,
+  Monitor,
 } from "lucide-react";
 
-const liveStatus = [
+const architectureStack = [
   {
-    machine: "Apple M2 Max (MPS)",
-    status: "running",
-    experiment: "Synthetic proof-walk training (vectorized loss v2)",
-    detail: "Epoch 3 / 10 · 5.7M param dual-stream model · LM loss 1.90 → 0.88",
+    icon: GitFork,
+    title: "9 Swappable Kernels",
+    description:
+      "Cosine, cosine-weighted, dot-product, RBF, Laplace, bilinear, complex magnitude, complex real, and attention-style kernels. Each computes pairwise similarity from phase embeddings and plugs into the same attention bias mechanism.",
   },
-  {
-    machine: "AMD GPU (ROCm 6.2)",
-    status: "running",
-    experiment: "TinyStories baseline (Standard Transformer)",
-    detail: "Epoch 7 / 20 · 5.53M params · val PPL 292 → 47.99",
-  },
-  {
-    machine: "AMD CPU (until GPU free)",
-    status: "running",
-    experiment: "TinyStories resonance (dual-stream)",
-    detail: "Epoch 2 / 20 · 5.70M params · val PPL 56.39 after 1 epoch",
-  },
-];
-
-const highlights = [
   {
     icon: Layers,
-    title: "8× More Compressible",
+    title: "5 Phase Embedding Variants",
     description:
-      "Phase stream requires only 29 principal components for 95% variance vs. 234 for semantics—enabling aggressive asymmetric quantization.",
-    stat: "29 vs 234 PCs",
+      "Real-valued learned tables, fixed Fourier features, complex-angle embeddings (with amplitude=1 and to_complex() integration), hierarchical multi-scale concatenation, and low-rank factorized embeddings.",
   },
   {
     icon: Zap,
-    title: "3% Parameter Overhead",
+    title: "6 Bias Application Modes",
     description:
-      "At 5.7M parameters, the dual-stream design adds only ~3.1% parameters and ~5% wall-clock time versus standard transformers.",
-    stat: "~3% overhead",
+      "Additive, multiplicative gate, residual gate, temperature-scaled, softmax-reweighted, and resonance-only (diagnostic). Each mode is a registered nn.Module that modifies how the resonance matrix enters attention logits.",
   },
   {
-    icon: Shield,
-    title: "Statistical Independence",
+    icon: Target,
+    title: "Per-Layer Configuration",
     description:
-      "Cross-predictability between semantic and phase streams is negligible (R² ≈ 0), confirming the model learns genuinely separate representations.",
-    stat: "R² ≈ 0",
-  },
-  {
-    icon: GitFork,
-    title: "Perturbation Stability",
-    description:
-      "Phase parameters remain stable (stability ratio ≈ 1.0) under Gaussian noise up to σ = 0.5 while semantic parameters degrade monotonically.",
-    stat: "σ = 0.5 stable",
+      "LayerConfigRegistry matches layer indices against patterns (all, even, odd, first:N, last:N, range:a:b) to assign custom kernels, bias modes, and initialization presets per layer. Lower layers can use local kernels (RBF) while upper layers use global ones (complex magnitude).",
   },
 ];
 
-const roadmap = [
+const modernArchs = [
   {
-    phase: "Phase 0a · Internal Validation",
-    icon: FlaskConical,
-    items: [
-      "Confirm resonance vs baseline under identical conditions (same tokenizer, data, hyperparams)",
-      "Same-seed replication to eliminate seed variance (N≥3 seeds)",
-      "Ablate: disable resonance bias, freeze blend, isolate mechanism vs extra params",
-    ],
+    name: "LLaMA",
+    features: ["RMSNorm", "SwiGLU", "GQA", "RoPE"],
+    variants: "Dense, MoE, Resonant Dense, Resonant MoE",
   },
   {
-    phase: "Phase 0b · External Comparability",
-    icon: Target,
-    items: [
-      "Switch to GPT-2 BPE tokenizer for direct comparison with einygpt & TinyStories paper",
-      "Iso-parameter matching: adjust dims so resonance and baseline have identical param counts",
-      "Reproduce published baselines at 4–7M scale to establish an absolute PPL anchor",
-    ],
+    name: "Qwen 3.5",
+    features: ["Hybrid linear/full attention", "QK norm", "RoPE"],
+    variants: "Dense, MoE, Resonant Dense, Resonant MoE",
   },
   {
-    phase: "Phase 1 · Mechanistic Understanding",
-    icon: Brain,
-    items: [
-      "PCA / t-SNE on phase vs semantic embeddings — what structure does phase capture?",
-      "Intervention: zero-out phase or semantic at inference to measure contribution",
-      "Visualize resonance matrix R[i,j] — does it encode syntax, phonetics, or long-range ties?",
-    ],
+    name: "Gemma 4",
+    features: ["Dual attention", "PLE", "YOCO KV sharing"],
+    variants: "Dense, MoE, Resonant Dense, Resonant MoE",
+  },
+];
+
+const interpTools = [
+  {
+    icon: Microscope,
+    title: "Sparse Autoencoders",
+    description:
+      "Trainable SAEs with ReLU encoder, MSE + L1 sparsity loss, dead-feature tracking, and reconstruction quality metrics. Used to analyze what the resonance stream encodes versus the semantic stream.",
   },
   {
-    phase: "Phase 2 · Scale & Transfer",
-    icon: TrendingUp,
-    items: [
-      "Scaling law sweep: 1M → 5M → 20M → 50M params on full TinyStories",
-      "Curriculum transfer: proof-walks → TinyStories → OpenWebText/C4 subsets",
-      "Downstream evaluation: story completion (GPT-4 scoring), BLiMP grammaticality",
-    ],
+    icon: Monitor,
+    title: "Linear Probes",
+    description:
+      "Task-specific probes with cross-validation, early stopping, and k-fold evaluation. Compare interpretability across 7 extractable streams: semantic embed, phase raw, phase projected, residual streams, attention outputs, and final hidden states.",
   },
   {
-    phase: "Phase 3 · Augment & Deploy",
-    icon: Layers,
-    items: [
-      "Resonance attention in LLaMA-style architectures (RMSNorm, SwiGLU, GQA, RoPE)",
-      "1–2 bit quantization of phase stream; asymmetric quantization of semantic stream",
-      "Multi-modal resonance: vision patches + text sharing a unified phase space",
-    ],
+    icon: Puzzle,
+    title: "Intervention Hooks",
+    description:
+      "Context managers for phase perturbation (zero, permute, noise), resonance weight scaling, per-token phase row patching/copying, and full forward-pass tracing with resonance matrix capture at every layer.",
+  },
+];
+
+const engineeringPractices = [
+  {
+    icon: TestTube,
+    title: "Smoke Tests",
+    description:
+      "Comprehensive test suite covering all kernel × phase embedding combinations, all bias modes, per-layer registry matching, modern architecture forward passes, SAE/probe training, and hard-negative verification.",
+  },
+  {
+    icon: Cpu,
+    title: "Multi-Device Support",
+    description:
+      "Automatic device selection (CUDA, MPS, CPU). Tested on Apple M2 Max (MPS) and AMD Radeon 890M with ROCm 6.2 (gfx11 override). Handles MPS-specific operator fallbacks gracefully.",
+  },
+  {
+    icon: Code2,
+    title: "Clean Factory APIs",
+    description:
+      "Every swappable component uses a typed factory (build_kernel, build_phase_embedding, build_bias_mode) with consistent kwargs passing. No global config mutations; each component is self-contained and testable.",
+  },
+];
+
+const reflections = [
+  {
+    title: "Architecture extraction is harder than it looks",
+    body: "Porting inference-optimized models from vLLM's C++/CUDA codebase into clean PyTorch training code required stripping tensor parallelism, paged KV caches, and fused MoE kernels. Each model (LLaMA, Qwen, Gemma) took 500+ lines of careful reimplementation to preserve numerical behavior while making the code trainable and hackable.",
+  },
+  {
+    title: "Vectorization dominates wall-clock time",
+    body: "The first contrastive-loss implementation used Python for-loops over positive and negative pairs. Replacing it with fully vectorized InfoNCE sped training up by roughly two orders of magnitude. This reinforced a principle I now apply reflexively: profile the loss function before anything else.",
+  },
+  {
+    title: "Default initialization can hide a mechanism",
+    body: "With phase_init_std=0.3 and resonance_attn_weight=0.1, the attention delta from resonance is ~0.000027 — effectively invisible. This explained why early experiments showed null results. The architecture only becomes active when presets (wide, strong, normalized) increase these values by 1–2 orders of magnitude. This taught me to always verify that a proposed mechanism is actually exercising its code path.",
+  },
+  {
+    title: "Synthetic data quality matters more than quantity",
+    body: "Early evals on TinyStories word-level data and structured Markov sequences were too unstructured to test the architecture's core claim — that phase-structured attention helps with topology-bearing sequences. We halted experiments and pivoted to building better eval infrastructure (β-reduction traces, semantic graph hard negatives) before burning more compute.",
   },
 ];
 
@@ -131,107 +132,274 @@ export default function Home() {
       <section className="relative overflow-hidden bg-gradient-to-b from-primary/5 to-background pt-16 pb-12">
         <div className="container mx-auto px-4 max-w-4xl text-center space-y-6">
           <Badge variant="secondary" className="text-xs">
-            Live Research · Dual-Stream Transformer Architecture
+            Self-Directed Study · Anthropic Fellows Program
           </Badge>
           <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold tracking-tight">
             Resonance Transformers
           </h1>
           <p className="text-xl text-muted-foreground max-w-2xl mx-auto leading-relaxed">
-            A <strong>living experiment</strong> in dual-stream architectures with
-            phase-structured attention. Every token receives a{" "}
-            <strong>semantic embedding</strong> and a{" "}
-            <strong>phase embedding</strong>—enabling structurally similar tokens
-            to attend more readily to one another.
+            A from-scratch exploration of <strong>dual-stream attention mechanisms</strong>.
+            Every token receives a semantic embedding and a phase embedding; pairwise
+            phase similarities bias attention logits through a learnable, swappable,
+            and per-layer-configurable resonance system.
           </p>
           <div className="flex flex-wrap items-center justify-center gap-3 pt-4">
-            <Link to="/paper">
+            <a
+              href="https://github.com/spwplace/restrans"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
               <Button size="lg" className="gap-2">
-                <BookOpen className="h-4 w-4" />
-                Read the Paper
+                <Github className="h-4 w-4" />
+                View on GitHub
               </Button>
-            </Link>
-            <Link to="/figures">
-              <Button size="lg" variant="outline" className="gap-2">
-                <Image className="h-4 w-4" />
-                View Figures
-              </Button>
-            </Link>
+            </a>
           </div>
         </div>
       </section>
 
-      {/* Live Status */}
+      {/* Project Overview */}
       <section className="container mx-auto px-4 max-w-6xl">
-        <div className="flex items-center gap-3 mb-6">
-          <div className="p-2 bg-green-500/10 rounded-lg">
-            <Activity className="h-6 w-6 text-green-600" />
-          </div>
-          <div>
-            <h2 className="text-2xl font-bold tracking-tight">Live Experiment Status</h2>
-            <p className="text-muted-foreground text-sm">
-              Training runs in progress across two machines
-            </p>
-          </div>
+        <div className="text-center mb-10">
+          <h2 className="text-3xl font-bold tracking-tight">What This Project Is</h2>
+          <p className="text-muted-foreground mt-2 max-w-2xl mx-auto">
+            Not a paper claiming results. A deep engineering study in building modular,
+            interpretable, and extensible transformer variants from first principles.
+          </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {liveStatus.map((run) => (
-            <Card
-              key={run.machine}
-              className={
-                run.status === "running"
-                  ? "border-green-500/30 bg-green-500/5"
-                  : "border-amber-500/30 bg-amber-500/5"
-              }
-            >
-              <CardHeader className="pb-2">
-                <div className="flex items-center justify-between">
-                  <Cpu className="h-5 w-5 text-primary" />
-                  <Badge
-                    variant={run.status === "running" ? "default" : "secondary"}
-                    className="text-xs"
-                  >
-                    {run.status === "running" ? "Running" : "Queued"}
-                  </Badge>
-                </div>
-                <CardTitle className="text-sm mt-2">{run.machine}</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                <p className="text-sm font-medium">{run.experiment}</p>
-                <p className="text-xs text-muted-foreground">{run.detail}</p>
-              </CardContent>
-            </Card>
-          ))}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <Card>
+            <CardHeader className="pb-2">
+              <FlaskConical className="h-5 w-5 text-primary mb-2" />
+              <CardTitle className="text-base">The Question</CardTitle>
+            </CardHeader>
+            <CardContent className="text-sm text-muted-foreground leading-relaxed">
+              Standard transformers collapse all token properties — semantics,
+              syntax, phonetics, structure — into a single embedding vector. What
+              happens if we split them? Can a dedicated <em>phase stream</em> encode
+              structural relationships (rhyme, bracket matching, scope) while a
+              <em>semantic stream</em> handles denotation?
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-2">
+              <Cpu className="h-5 w-5 text-primary mb-2" />
+              <CardTitle className="text-base">The Approach</CardTitle>
+            </CardHeader>
+            <CardContent className="text-sm text-muted-foreground leading-relaxed">
+              Build the entire stack from scratch: base dual-stream transformer,
+              9 swappable resonance kernels, 5 phase embedding variants, 6 bias modes,
+              per-layer configuration registries, and faithful PyTorch reimplementations
+              of LLaMA, Qwen3.5, and Gemma4 — each in dense, MoE, and resonant variants.
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-2">
+              <Brain className="h-5 w-5 text-primary mb-2" />
+              <CardTitle className="text-base">The Scope</CardTitle>
+            </CardHeader>
+            <CardContent className="text-sm text-muted-foreground leading-relaxed">
+              ~6,000 lines of PyTorch covering architecture, training harnesses,
+              synthetic data generators (λ-calculus proof walks, semantic graph stories),
+              interpretability tooling (SAEs, probes, intervention hooks), and a
+              comprehensive smoke-test suite. All runnable from a single <code>uv</code> environment.
+            </CardContent>
+          </Card>
         </div>
       </section>
 
       <Separator className="container mx-auto px-4 max-w-6xl" />
 
-      {/* Key Results */}
+      {/* Modular Architecture Stack */}
       <section className="container mx-auto px-4 max-w-6xl">
-        <div className="text-center mb-10">
-          <h2 className="text-3xl font-bold tracking-tight">Key Results</h2>
-          <p className="text-muted-foreground mt-2">
-            Early findings from systematic evaluation at scales up to 5.7M parameters
-          </p>
+        <div className="flex items-center gap-3 mb-8">
+          <div className="p-2 bg-primary/10 rounded-lg">
+            <Layers className="h-6 w-6 text-primary" />
+          </div>
+          <div>
+            <h2 className="text-3xl font-bold tracking-tight">The Modular Stack</h2>
+            <p className="text-muted-foreground">
+              Every component is swappable, registered, and independently testable
+            </p>
+          </div>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {highlights.map((h) => {
-            const Icon = h.icon;
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {architectureStack.map((item) => {
+            const Icon = item.icon;
             return (
-              <Card key={h.title} className="hover:shadow-md transition-shadow">
+              <Card key={item.title} className="hover:shadow-md transition-shadow">
                 <CardHeader className="pb-2">
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
                     <Icon className="h-5 w-5 text-primary" />
-                    <span className="text-xs font-semibold text-primary bg-primary/10 px-2 py-0.5 rounded-full">
-                      {h.stat}
-                    </span>
+                    <CardTitle className="text-base">{item.title}</CardTitle>
                   </div>
-                  <CardTitle className="text-base mt-3">{h.title}</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <p className="text-sm text-muted-foreground leading-relaxed">
-                    {h.description}
+                    {item.description}
+                  </p>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+
+        <div className="mt-8 grid grid-cols-1 lg:grid-cols-2 gap-8">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Core Equations</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4 text-sm text-muted-foreground">
+              <p>
+                The Resonance Transformer splits each token into two embeddings:
+              </p>
+              <ol className="list-decimal list-inside space-y-2">
+                <li>
+                  <strong>Dual embeddings</strong> —{" "}
+                  <code className="bg-muted px-1 rounded">E_sem ∈ ℝ^(V×D)</code> +{" "}
+                  <code className="bg-muted px-1 rounded">E_phase ∈ ℝ^(V×F)</code> (F = 32 by default).
+                </li>
+                <li>
+                  <strong>Resonance matrix</strong> —{" "}
+                  <code className="bg-muted px-1 rounded">R[i,j] = kernel(φ_i, φ_j)</code>{" "}
+                  where the kernel is selected from the registry.
+                </li>
+                <li>
+                  <strong>Attention bias</strong> — The chosen bias mode modifies
+                  attention logits using <code className="bg-muted px-1 rounded">R</code>{" "}
+                  and a per-head learnable weight.
+                </li>
+                <li>
+                  <strong>Blend gate</strong> — A per-dimension sigmoid-blend
+                  interpolates between semantic and phase projections before
+                  entering the transformer blocks.
+                </li>
+              </ol>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Initialization Presets</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4 text-sm text-muted-foreground">
+              <p>
+                Because the default preset (phase_std=0.3, weight=0.1) produces an
+                attention delta of ~2.7×10⁻⁵ — effectively inert — the architecture
+                ships with five initialization presets:
+              </p>
+              <ul className="list-disc list-inside space-y-1">
+                <li>
+                  <strong>default</strong> — (0.3, 0.1) for baseline comparisons
+                </li>
+                <li>
+                  <strong>wide</strong> — (1.0, 0.3) for broader phase exploration
+                </li>
+                <li>
+                  <strong>strong</strong> — (1.2, 1.0) for active resonance signal
+                </li>
+                <li>
+                  <strong>very_strong</strong> — (2.0, 2.0) for diagnostic extremes
+                </li>
+                <li>
+                  <strong>normalized</strong> — (0.3, 0.1) with per-head normalization
+                </li>
+              </ul>
+              <p>
+                Presets can be applied globally or per-layer via the registry,
+                enabling systematic ablation of how much resonance signal is
+                injected at different depths.
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+      </section>
+
+      <Separator className="container mx-auto px-4 max-w-6xl" />
+
+      {/* Modern Architectures */}
+      <section className="container mx-auto px-4 max-w-6xl">
+        <div className="flex items-center gap-3 mb-8">
+          <div className="p-2 bg-primary/10 rounded-lg">
+            <Cpu className="h-6 w-6 text-primary" />
+          </div>
+          <div>
+            <h2 className="text-3xl font-bold tracking-tight">Modern Architecture Integration</h2>
+            <p className="text-muted-foreground">
+              Faithful PyTorch reimplementations extracted from production inference codebases
+            </p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {modernArchs.map((arch) => (
+            <Card key={arch.name} className="hover:shadow-md transition-shadow">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base">{arch.name}</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="flex flex-wrap gap-1.5">
+                  {arch.features.map((f) => (
+                    <Badge key={f} variant="secondary" className="text-xs">
+                      {f}
+                    </Badge>
+                  ))}
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  <strong>Variants:</strong> {arch.variants}
+                </p>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+
+        <div className="mt-6 text-sm text-muted-foreground leading-relaxed">
+          <p>
+            Each architecture family is implemented in ~500 lines of plain PyTorch,
+            stripped of inference-only optimizations (fused kernels, tensor parallelism,
+            paged attention) and restructured for gradient-based training. The resonance
+            mechanism is injected as a modular attention bias that works with GQA, RoPE,
+            RMSNorm, and SwiGLU without altering the core backbone equations. All 14
+            variants (standard + resonant × dense + MoE across 3 families) share a
+            unified config dataclass and factory pattern.
+          </p>
+        </div>
+      </section>
+
+      <Separator className="container mx-auto px-4 max-w-6xl" />
+
+      {/* Interpretability & Analysis */}
+      <section className="container mx-auto px-4 max-w-6xl">
+        <div className="flex items-center gap-3 mb-8">
+          <div className="p-2 bg-primary/10 rounded-lg">
+            <Microscope className="h-6 w-6 text-primary" />
+          </div>
+          <div>
+            <h2 className="text-3xl font-bold tracking-tight">Interpretability & Analysis</h2>
+            <p className="text-muted-foreground">
+              Tools to understand what the resonance stream learns versus the semantic stream
+            </p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {interpTools.map((item) => {
+            const Icon = item.icon;
+            return (
+              <Card key={item.title} className="hover:shadow-md transition-shadow">
+                <CardHeader className="pb-2">
+                  <div className="flex items-center gap-2">
+                    <Icon className="h-5 w-5 text-primary" />
+                    <CardTitle className="text-base">{item.title}</CardTitle>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-sm text-muted-foreground leading-relaxed">
+                    {item.description}
                   </p>
                 </CardContent>
               </Card>
@@ -242,491 +410,211 @@ export default function Home() {
 
       <Separator className="container mx-auto px-4 max-w-6xl" />
 
-      {/* Research Roadmap */}
+      {/* Synthetic Data & Evaluation */}
       <section className="container mx-auto px-4 max-w-6xl">
         <div className="flex items-center gap-3 mb-8">
           <div className="p-2 bg-primary/10 rounded-lg">
-            <Rocket className="h-6 w-6 text-primary" />
+            <TestTube className="h-6 w-6 text-primary" />
           </div>
           <div>
-            <h2 className="text-3xl font-bold tracking-tight">Research Roadmap</h2>
+            <h2 className="text-3xl font-bold tracking-tight">Synthetic Data & Evaluation</h2>
             <p className="text-muted-foreground">
-              How we scale this programme from 4M-parameter demos to serious models
+              Topology-bearing datasets designed to test structural attention
             </p>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {roadmap.map((phase) => {
-            const Icon = phase.icon;
-            return (
-              <Card key={phase.phase} className="hover:shadow-md transition-shadow">
-                <CardHeader className="pb-2">
-                  <div className="flex items-center gap-2">
-                    <Icon className="h-5 w-5 text-primary" />
-                    <CardTitle className="text-base">{phase.phase}</CardTitle>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <ul className="space-y-2">
-                    {phase.items.map((item, i) => (
-                      <li key={i} className="text-sm text-muted-foreground flex gap-2">
-                        <GitBranch className="h-4 w-4 shrink-0 mt-0.5 text-primary/60" />
-                        <span>{item}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </CardContent>
-              </Card>
-            );
-          })}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">β-Reduction Trace Dataset</CardTitle>
+            </CardHeader>
+            <CardContent className="text-sm text-muted-foreground leading-relaxed space-y-3">
+              <p>
+                A generator for lambda-calculus terms that produces verified
+                reduction traces: each sample is a pair (original term, normal form)
+                with the full β-reduction path recorded. Terms are checked for
+                confluence and normal-form validity before inclusion.
+              </p>
+              <p>
+                This dataset is designed to test whether a model can learn
+                <em>rewrite topology</em> — the graph of which terms reduce to which
+                — rather than surface statistical correlations.
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Semantic Graph Hard Negatives</CardTitle>
+            </CardHeader>
+            <CardContent className="text-sm text-muted-foreground leading-relaxed space-y-3">
+              <p>
+                A story-generation pipeline that builds semantic graphs (entities,
+                events, relations) and renders them into natural-language narratives.
+                Each graph produces verified positive examples and
+                <strong>hard negatives</strong> via 11 single-mutation operators:
+              </p>
+              <ul className="list-disc list-inside space-y-1">
+                <li>reverse_edge, swap_target, flip_relation</li>
+                <li>negate_event, swap_subject_object, change_quantifier</li>
+                <li>remove_negation, change_location, weaken_cause</li>
+                <li>swap_belief_holder, negate_belief_content</li>
+              </ul>
+              <p>
+                All negatives are verified: no text collisions with positives,
+                exactly one structural mutation per negative, and empirical
+                mutation-type distribution tracking.
+              </p>
+            </CardContent>
+          </Card>
         </div>
       </section>
 
       <Separator className="container mx-auto px-4 max-w-6xl" />
 
-      {/* For Programmers */}
+      {/* Engineering Practices */}
       <section className="container mx-auto px-4 max-w-6xl">
         <div className="flex items-center gap-3 mb-8">
           <div className="p-2 bg-primary/10 rounded-lg">
             <Code2 className="h-6 w-6 text-primary" />
           </div>
           <div>
-            <h2 className="text-3xl font-bold tracking-tight">For Programmers</h2>
-            <p className="text-muted-foreground">The artifact, code structure, and how to run it</p>
+            <h2 className="text-3xl font-bold tracking-tight">Engineering Practices</h2>
+            <p className="text-muted-foreground">
+              How the codebase is organized, tested, and run
+            </p>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          <div className="space-y-6">
-            <div>
-              <h3 className="text-lg font-semibold mb-2">What This Is</h3>
-              <p className="text-muted-foreground leading-relaxed">
-                The Resonance Transformer is a PyTorch implementation of a dual-stream
-                causal language model. It lives alongside a standard transformer baseline
-                in the same codebase, so you can train both and compare. We are now
-                benchmarking resonance against <strong>modern architectures</strong>:
-                LLaMA (RMSNorm + SwiGLU + GQA + RoPE), Qwen3.5 (hybrid linear/full
-                attention + QK norm), and Gemma4 (dual attention + PLE + YOCO KV
-                sharing) — each in dense and MoE variants, with and without resonance.
-                The repo also includes a synthetic lambda-calculus proof-walk generator,
-                training harnesses, and analysis scripts.
-              </p>
-            </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {engineeringPractices.map((item) => {
+            const Icon = item.icon;
+            return (
+              <Card key={item.title} className="hover:shadow-md transition-shadow">
+                <CardHeader className="pb-2">
+                  <div className="flex items-center gap-2">
+                    <Icon className="h-5 w-5 text-primary" />
+                    <CardTitle className="text-base">{item.title}</CardTitle>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-sm text-muted-foreground leading-relaxed">
+                    {item.description}
+                  </p>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
 
-            <div>
-              <h3 className="text-lg font-semibold mb-2">Quick Start</h3>
-              <pre className="bg-muted rounded-lg p-4 text-sm overflow-x-auto font-mono">
-{`# Train a resonance model at small scale
-uv run python resonance/train.py --mode resonance --scale small
+        <div className="mt-8">
+          <h3 className="text-lg font-semibold mb-3">Repository Structure</h3>
+          <pre className="bg-muted rounded-lg p-4 text-sm overflow-x-auto font-mono">
+{`resonance/
+├── resonance/
+│   ├── kernels.py              # 9 swappable resonance kernels
+│   ├── phase_embeddings.py     # 5 phase embedding variants
+│   ├── bias_modes.py           # 6 bias application modes
+│   ├── layer_config.py         # Per-layer kernel/bias/preset registry
+│   ├── config.py               # Central config dataclasses
+│   ├── models.py               # Base Standard & Resonance transformers
+│   ├── modern/                 # LLaMA, Qwen3.5, Gemma4 (dense + MoE + resonant)
+│   ├── sae.py                  # Sparse autoencoder + trainer
+│   ├── probes.py               # Linear probes + cross-validation trainer
+│   └── interpretability.py     # Traces, interventions, hooks
+├── synthetic/
+│   ├── beta_reduction_dataset.py   # λ-calculus reduction trace generator
+│   └── semantic_story.py           # Graph-to-story + 11 hard-negative mutations
+├── tests/
+│   └── test_smoke.py           # 11-test integration suite
+├── experiment_text.py          # TinyStories training harness (14 architectures)
+├── found_suite.py              # Unified foundational experiment runner
+└── sweep_variants.py           # Grid sweep over kernel/phase/bias/preset combos`}
+          </pre>
+        </div>
 
-# Train standard baseline for comparison
-uv run python resonance/train.py --mode standard --scale small
+        <div className="mt-6">
+          <h3 className="text-lg font-semibold mb-3">Quick Start</h3>
+          <pre className="bg-muted rounded-lg p-4 text-sm overflow-x-auto font-mono">
+{`# Clone and enter the environment
+uv sync
 
-# Synthetic proof-walk training with mutations
-uv run python resonance/train.py --mode synthetic --scale medium --mutate
+# Run the full smoke-test suite
+PYTHONPATH=. uv run python tests/test_smoke.py
 
-# Full experiment: proof-walk prior → text fine-tuning
-uv run python resonance/experiment_text.py --condition proof_prior \
-  --epochs 20 --pretrain_epochs 10
+# Train a resonant LLaMA on TinyStories
+uv run python experiment_text.py --architecture resonant_llama \
+  --resonance_kernel complex_magnitude --phase_embedding complex_angle \
+  --bias_mode residual_gate --init_preset strong --epochs 20
 
-# AMD GPU (ROCm) — force gfx11 compatibility
-HSA_OVERRIDE_GFX_VERSION=11.0.0 python resonance/train.py ...`}
-              </pre>
-            </div>
+# Run a β-reduction retrieval experiment
+uv run python found_suite.py --experiment beta_reduction \
+  --embed_dim 128 --n_layers 4 --epochs 10
 
-            <div>
-              <h3 className="text-lg font-semibold mb-2">Key Files</h3>
-              <ul className="space-y-2 text-sm text-muted-foreground">
-                <li className="flex gap-2">
-                  <code className="bg-muted px-1.5 rounded text-xs shrink-0">resonance/resonance/models.py</code>
-                  <span>StandardTransformer and ResonanceTransformer (2017-style)</span>
-                </li>
-                <li className="flex gap-2">
-                  <code className="bg-muted px-1.5 rounded text-xs shrink-0">resonance/resonance/modern/</code>
-                  <span>LLaMA, Qwen3.5, Gemma4 — dense + MoE + resonance variants</span>
-                </li>
-                <li className="flex gap-2">
-                  <code className="bg-muted px-1.5 rounded text-xs shrink-0">resonance/experiment_text.py</code>
-                  <span>TinyStories experiment harness with --architecture flag</span>
-                </li>
-                <li className="flex gap-2">
-                  <code className="bg-muted px-1.5 rounded text-xs shrink-0">resonance/analysis.py</code>
-                  <span>Checkpoint inspector: PCA, resonance matrix, blend stats</span>
-                </li>
-                <li className="flex gap-2">
-                  <code className="bg-muted px-1.5 rounded text-xs shrink-0">resonance/synthetic/</code>
-                  <span>Lambda calculus generator, proof walks, mutation engine</span>
-                </li>
-              </ul>
-            </div>
-          </div>
-
-          <Card className="h-fit">
-            <CardHeader>
-              <CardTitle className="text-base">Architecture at a Glance</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4 text-sm text-muted-foreground">
-              <p>
-                The core idea: every token receives a <strong>semantic embedding</strong>{" "}
-                and a <strong>phase embedding</strong>. Pairwise phase cosine similarities
-                form a <strong>resonance matrix</strong> that biases attention logits:
-              </p>
-              <ol className="list-decimal list-inside space-y-2">
-                <li>
-                  <strong>Dual embeddings</strong> —{" "}
-                  <code className="bg-muted px-1 rounded">E_sem ∈ ℝ^(V×D)</code> +{" "}
-                  <code className="bg-muted px-1 rounded">E_phase ∈ ℝ^(V×F)</code> (F=32).
-                </li>
-                <li>
-                  <strong>Resonance matrix</strong> —{" "}
-                  <code className="bg-muted px-1 rounded">R[i,j] = mean_f cos(φ_i − φ_j)</code>.
-                </li>
-                <li>
-                  <strong>Attention bias</strong> —{" "}
-                  <code className="bg-muted px-1 rounded">attn = QK^T/√d + R·w_r</code>{" "}
-                  before softmax.
-                </li>
-                <li>
-                  <strong>Modern backbones</strong> — Resonance is injected into
-                  LLaMA (GQA+RoPE+SwiGLU), Qwen3.5 (hybrid linear attention), and
-                  Gemma4 (dual attention+PLE) architectures.
-                </li>
-                <li>
-                  <strong>Linear attention</strong> — For Qwen3.5's recurrent layers,
-                  resonance drives an output gate instead of a logit bias.
-                </li>
-              </ol>
-              <p>
-                Dense and MoE variants of each architecture are implemented in pure
-                PyTorch, extracted faithfully from the vLLM inference codebase.
-              </p>
-            </CardContent>
-          </Card>
+# AMD GPU with ROCm gfx11 override
+HSA_OVERRIDE_GFX_VERSION=11.0.0 python experiment_text.py ...`}
+          </pre>
         </div>
       </section>
 
       <Separator className="container mx-auto px-4 max-w-6xl" />
 
-      {/* For ML Scientists */}
+      {/* Process Reflections */}
       <section className="container mx-auto px-4 max-w-6xl">
         <div className="flex items-center gap-3 mb-8">
           <div className="p-2 bg-primary/10 rounded-lg">
             <Brain className="h-6 w-6 text-primary" />
           </div>
           <div>
-            <h2 className="text-3xl font-bold tracking-tight">For ML Scientists</h2>
-            <p className="text-muted-foreground">Architecture, methodology, and what we are testing right now</p>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <Card className="lg:col-span-2">
-            <CardHeader>
-              <CardTitle>Current Experiment: Proof-Walk Prior</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4 text-sm text-muted-foreground leading-relaxed">
-              <p>
-                Standard causal transformers collapse all token properties—semantic
-                denotation, orthographic form, phonetic structure, syntactic role—into
-                a single embedding vector. The Resonance Transformer introduces a
-                principled split: a <strong>semantic stream</strong> for denotational
-                content and a <strong>phase stream</strong> for structural and phonetic
-                pattern.
-              </p>
-              <p>
-                Our <strong>live experiment</strong> tests whether pre-training on
-                synthetic <strong>lambda-calculus proof-walks</strong> (with contrastive
-                group objectives) creates a useful structural prior for natural-language
-                learning. We compare three conditions:
-              </p>
-              <ol className="list-decimal list-inside space-y-1">
-                <li>
-                  <strong>Baseline</strong> — Standard transformer trained from scratch on{" "}
-                  <em>TinyStories</em>.
-                </li>
-                <li>
-                  <strong>Resonance</strong> — Dual-stream transformer trained from scratch
-                  on <em>TinyStories</em>.
-                </li>
-                <li>
-                  <strong>Proof-Prior</strong> — Pre-train 10 epochs on proof-walks
-                  (contrastive + LM), then fine-tune 20 epochs on <em>TinyStories</em>.
-                </li>
-              </ol>
-              <p>
-                If the proof-prior condition converges faster or reaches lower
-                perplexity, it suggests that structured synthetic reasoning tasks can
-                serve as a useful pre-training signal for language models—analogous to
-                how chess or Go pre-training has been explored for reasoning.
-              </p>
-            </CardContent>
-          </Card>
-
-          <div className="space-y-4">
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm">Training Signal</CardTitle>
-              </CardHeader>
-              <CardContent className="text-sm text-muted-foreground">
-                Models are trained on synthetic lambda calculus proof walks—not as a
-                task-specific corpus, but as a <strong>general pretraining signal</strong>{" "}
-                designed to instill structural reasoning. Contrastive group objectives
-                and semantics-preserving mutations provide additional regularization.
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm">Compressibility Asymmetry</CardTitle>
-              </CardHeader>
-              <CardContent className="text-sm text-muted-foreground">
-                Aggressive 2-bit quantization of phase embeddings{" "}
-                <strong>improves</strong> validation perplexity by 0.24 points, while
-                equivalent semantic quantization degrades it by 38.49. This suggests
-                the phase stream functions as a compact structural index that benefits
-                from regularization.
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm">Perturbation Stability</CardTitle>
-              </CardHeader>
-              <CardContent className="text-sm text-muted-foreground">
-                Phase parameters exhibit near-unit stability ratios under Gaussian
-                noise (σ ∈ [0.001, 0.5]), while semantic embeddings degrade
-                monotonically. This decoupled sensitivity profile suggests dual-stream
-                architectures may offer inherent robustness advantages.
-              </CardContent>
-            </Card>
-          </div>
-        </div>
-
-        <div className="mt-8">
-          <Link to="/paper">
-            <Button variant="outline" className="gap-2">
-              Read Full Methodology & Results
-              <ArrowRight className="h-4 w-4" />
-            </Button>
-          </Link>
-        </div>
-      </section>
-
-      <Separator className="container mx-auto px-4 max-w-6xl" />
-
-      {/* For AI Devs / Agent Wranglers */}
-      <section className="container mx-auto px-4 max-w-6xl">
-        <div className="flex items-center gap-3 mb-8">
-          <div className="p-2 bg-primary/10 rounded-lg">
-            <Bot className="h-6 w-6 text-primary" />
-          </div>
-          <div>
-            <h2 className="text-3xl font-bold tracking-tight">
-              For AI Devs & Agent Wranglers
-            </h2>
-            <p className="text-muted-foreground">How this project is going, what worked, and what didn't</p>
+            <h2 className="text-3xl font-bold tracking-tight">Process Reflections</h2>
+            <p className="text-muted-foreground">
+              What worked, what didn't, and what I learned along the way
+            </p>
           </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">The Process</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3 text-sm text-muted-foreground leading-relaxed">
-              <p>
-                This project started as a reproduction of an architecture sketch from a
-                GitHub repo. The first stage was extracting clean, runnable PyTorch
-                modules from a notebook-style codebase—turning research code into
-                something that could be trained systematically at multiple scales.
-              </p>
-              <p>
-                Once the baseline and resonance models were training stably, we
-                implemented four novel experiment tracks: perplexity stability under
-                perturbation, compressibility via quantization and pruning, gestalt
-                stream geometry analysis, and a synthetic lambda-calculus proof-walk
-                generator with contrastive training.
-              </p>
-              <p>
-                We are now running the first <strong>natural-language transfer
-                experiment</strong>: testing whether proof-walk pretraining acts as a
-                useful structural prior for learning English from the TinyStories
-                dataset.
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Struggles & Lessons</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3 text-sm text-muted-foreground leading-relaxed">
-              <p>
-                <strong>Undertraining is the biggest caveat.</strong> Early models ran
-                for only 2–5 epochs on CPU. Absolute perplexities are high (~4,800)
-                because nothing is converged. The results are meaningful for{" "}
-                <em>relative</em> comparisons and <em>structural properties</em> of
-                representations, but not for absolute language modeling performance.
-                We are now scaling to 20 epochs on GPU and testing modern architectures.
-              </p>
-              <p>
-                <strong>Modern architectures are expensive to extract.</strong> Porting
-                LLaMA, Qwen3.5, and Gemma4 from vLLM's inference-optimized C++/CUDA
-                codebase into clean PyTorch training code is 1,500+ lines per model.
-                The vLLM abstractions (tensor parallelism, paged KV cache, fused MoE
-                kernels) must all be stripped and reimplemented in standard nn.Module
-                form.
-              </p>
-              <p>
-                <strong>Vectorization matters enormously.</strong> The first
-                contrastive-loss implementation used Python for-loops over positive
-                and negative pairs. Replacing it with a fully vectorized InfoNCE
-                operation sped training up by ~100×. Always profile your loss
-                functions.
-              </p>
-              <p>
-                <strong>ROCm on AMD APUs is possible but fragile.</strong> The Radeon
-                890M is not officially supported, but forcing{" "}
-                <code>HSA_OVERRIDE_GFX_VERSION=11.0.0</code> lets PyTorch use the
-                gfx1100 kernel libraries. Performance is solid (~11 min/epoch for a
-                4.5M-param model on TinyStories).
-              </p>
-              <p>
-                <strong>Synthetic data transfer is the open question.</strong> We are
-                actively testing whether lambda-calculus proof-walks create a useful
-                prior for natural language. Results expected within hours.
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">What Worked Well</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3 text-sm text-muted-foreground leading-relaxed">
-              <p>
-                The <strong>unified training harness</strong> with scale presets
-                (tiny/small/medium/large) made it trivial to run systematic grids.
-                Every run auto-saves config, reproducibility metadata, and checkpoints.
-              </p>
-              <p>
-                The <strong>asymmetric compressibility finding</strong> is robust and
-                surprising: quantizing phase embeddings to 2-bit <em>improves</em>{" "}
-                perplexity. This wasn't hypothesized upfront—it fell out of the
-                compression experiments cleanly.
-              </p>
-              <p>
-                Using <strong>automated figure generation</strong> from experiment
-                outputs meant the paper could be regenerated end-to-end whenever
-                results changed. No manual plot updates.
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Tooling & Stack</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3 text-sm text-muted-foreground leading-relaxed">
-              <p>
-                <strong>Research:</strong> PyTorch, NumPy, Matplotlib, scikit-learn for
-                PCA and effective rank. MPS auto-detection for Apple Silicon; ROCm 6.2
-                with gfx11 override for AMD APUs.
-              </p>
-              <p>
-                <strong>Experiments:</strong> Four analysis scripts
-                (compressibility, gestalt, perturbation, param compressibility) that
-                load checkpoints and emit JSON + PNG outputs.
-              </p>
-              <p>
-                <strong>Paper:</strong> Markdown sections compiled into a single
-                document, then converted to DOCX with Pandoc-style tooling.
-              </p>
-              <p>
-                <strong>Website:</strong> Vite + React + TypeScript + Tailwind +
-                shadcn/ui, deployed via GitHub Actions to GitHub Pages. React-markdown
-                renders the paper in-browser.
-              </p>
-            </CardContent>
-          </Card>
+          {reflections.map((r) => (
+            <Card key={r.title} className="hover:shadow-md transition-shadow">
+              <CardHeader className="pb-2">
+                <div className="flex items-center gap-2">
+                  <GitBranch className="h-5 w-5 text-primary" />
+                  <CardTitle className="text-base">{r.title}</CardTitle>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-muted-foreground leading-relaxed">
+                  {r.body}
+                </p>
+              </CardContent>
+            </Card>
+          ))}
         </div>
       </section>
 
       <Separator className="container mx-auto px-4 max-w-6xl" />
 
-      {/* Downloads */}
-      <section className="container mx-auto px-4 max-w-6xl">
-        <div className="text-center mb-10">
-          <h2 className="text-3xl font-bold tracking-tight">Downloads</h2>
-          <p className="text-muted-foreground mt-2">
-            Code, data, models, and the full paper
-          </p>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 max-w-4xl mx-auto">
-          <Card className="hover:shadow-md transition-shadow">
-            <CardHeader className="pb-3">
-              <div className="flex items-center gap-2">
-                <Download className="h-5 w-5 text-primary" />
-                <CardTitle className="text-base">Full Package</CardTitle>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-muted-foreground mb-4">
-                Complete codebase, datasets, checkpoints, and experiment outputs.
-                (~100 MB — available via GitHub Releases)
-              </p>
-              <a href="https://github.com/spwplace/restrans/releases" target="_blank" rel="noopener noreferrer">
-                <Button variant="outline" size="sm" className="w-full gap-2">
-                  <Download className="h-4 w-4" />
-                  Get on GitHub Releases
-                </Button>
-              </a>
-            </CardContent>
-          </Card>
-
-          <Card className="hover:shadow-md transition-shadow">
-            <CardHeader className="pb-3">
-              <div className="flex items-center gap-2">
-                <Download className="h-5 w-5 text-primary" />
-                <CardTitle className="text-base">Code Package</CardTitle>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-muted-foreground mb-4">
-                Source code, models, training scripts, and experiment harness only.
-                (~50 MB)
-              </p>
-              <a href={`${import.meta.env.BASE_URL}resonance-package.tar.gz`} download>
-                <Button variant="outline" size="sm" className="w-full gap-2">
-                  <Download className="h-4 w-4" />
-                  Download
-                </Button>
-              </a>
-            </CardContent>
-          </Card>
-
-          <Card className="hover:shadow-md transition-shadow">
-            <CardHeader className="pb-3">
-              <div className="flex items-center gap-2">
-                <BookOpen className="h-5 w-5 text-primary" />
-                <CardTitle className="text-base">Paper (DOCX)</CardTitle>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-muted-foreground mb-4">
-                Formatted academic paper with endnotes and figures.
-              </p>
-              <a href={`${import.meta.env.BASE_URL}Resonance_Transformers_Paper.docx`} download>
-                <Button variant="outline" size="sm" className="w-full gap-2">
-                  <Download className="h-4 w-4" />
-                  Download
-                </Button>
-              </a>
-            </CardContent>
-          </Card>
-        </div>
+      {/* CTA */}
+      <section className="container mx-auto px-4 max-w-4xl text-center pb-8">
+        <h2 className="text-2xl font-bold tracking-tight mb-4">
+          Explore the Code
+        </h2>
+        <p className="text-muted-foreground mb-6">
+          The full repository, with instructions for reproduction, is available on GitHub.
+          Every architecture variant, training harness, and analysis tool is runnable
+          from a single <code>uv</code> environment.
+        </p>
+        <a
+          href="https://github.com/spwplace/restrans"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          <Button size="lg" className="gap-2">
+            <Github className="h-4 w-4" />
+            github.com/spwplace/restrans
+          </Button>
+        </a>
       </section>
     </div>
   );

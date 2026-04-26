@@ -1,11 +1,9 @@
 import { Link, useLocation } from "react-router";
-import { BookOpen, Image, Home, FlaskConical } from "lucide-react";
+import { Home, FlaskConical, Github } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const navItems = [
   { path: "/", label: "Home", icon: Home },
-  { path: "/paper", label: "Paper", icon: BookOpen },
-  { path: "/figures", label: "Figures", icon: Image },
 ];
 
 export default function Layout({ children }: { children: React.ReactNode }) {
@@ -39,6 +37,15 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                 </Link>
               );
             })}
+            <a
+              href="https://github.com/spwplace/restrans"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+            >
+              <Github className="h-4 w-4" />
+              GitHub
+            </a>
           </nav>
         </div>
       </header>
@@ -50,11 +57,11 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       <footer className="border-t py-8 mt-12">
         <div className="container mx-auto px-4 text-center text-sm text-muted-foreground">
           <p className="mb-2">
-            Resonance Transformers Research Project ·{" "}
+            A self-directed study project ·{" "}
             <a href="https://github.com/spwplace/restrans" className="underline hover:text-foreground">GitHub</a>
           </p>
           <p>
-            Dual-stream architectures with phase-structured attention · Synthetic lambda calculus pretraining
+            Modular dual-stream transformer architectures implemented from scratch in PyTorch
           </p>
         </div>
       </footer>

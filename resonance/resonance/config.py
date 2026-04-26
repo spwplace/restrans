@@ -50,6 +50,23 @@ class ResonanceConfig:
     phonetic_init: bool = False
     use_phase_stream: bool = True
     use_resonance_bias: bool = True
+    center_resonance: bool = False
+    normalize_resonance: bool = False
+    # Kernel selection and hyperparameters
+    resonance_kernel: str = "cosine"
+    kernel_gamma: float = 1.0
+    kernel_learnable_gamma: bool = False
+    kernel_rank: int | None = None
+    kernel_temperature: float = 1.0
+    # Phase embedding variant
+    phase_embedding: str = "real"
+    phase_embedding_rank: int = 8
+    phase_embedding_scales: int = 4
+    # Bias application mode
+    bias_mode: str = "additive"
+    bias_gate_init: float = 0.0
+    # Initialization preset
+    init_preset: str = "default"
 
 
 def count_params(config: StandardConfig | ResonanceConfig) -> int:

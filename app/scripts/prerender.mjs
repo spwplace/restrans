@@ -6,21 +6,17 @@ import { build } from "vite";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(__dirname, "..");
 
-const routes = ["/", "/paper", "/figures"];
+const routes = ["/"];
 
 async function prerender() {
-  // 1. Generate paper data
-  console.log("Generating paper data...");
-  await import("./generate-paper-data.mjs");
-
-  // 2. Build client bundle
+  // 1. Build client bundle
   console.log("Building client bundle...");
   await build({
     root,
     configFile: path.join(root, "vite.config.ts"),
   });
 
-  // 3. Build SSR bundle
+  // 2. Build SSR bundle
   console.log("Building SSR bundle...");
   await build({
     root,
@@ -32,15 +28,15 @@ async function prerender() {
     },
   });
 
-  // 4. Load SSR render function
+  // 3. Load SSR render function
   const serverEntryPath = path.join(root, "dist/server/entry-server.js");
   const { render } = await import(serverEntryPath);
 
-  // 5. Read client template
+  // 4. Read client template
   const templatePath = path.join(root, "dist/index.html");
   const template = fs.readFileSync(templatePath, "utf-8");
 
-  // 6. Render each route
+  // 5. Render each route
   const basePath = process.env.BASE_PATH || "/";
   const basePrefix = basePath === "/" ? "" : basePath.replace(/\/$/, "");
 
@@ -64,10 +60,10 @@ async function prerender() {
     console.log(`Prerendered ${url} -> ${outPath.replace(root + "/", "")}`);
   }
 
-  // 7. Clean up SSR build
+  // 6. Clean up SSR build
   fs.rmSync(path.join(root, "dist/server"), { recursive: true, force: true });
 
-  // 8. Also copy index.html to 404.html for GitHub Pages SPA fallback
+  // 7. Also copy index.html to 404.html for GitHub Pages SPA fallback
   const notFoundPath = path.join(root, "dist/404.html");
   fs.copyFileSync(path.join(root, "dist/index.html"), notFoundPath);
   console.log("Copied dist/index.html -> dist/404.html");
