@@ -304,10 +304,13 @@ export default function Home() {
               <p className="text-muted-foreground leading-relaxed">
                 The Resonance Transformer is a PyTorch implementation of a dual-stream
                 causal language model. It lives alongside a standard transformer baseline
-                in the same codebase, so you can train both and compare. The repo includes
-                a synthetic lambda-calculus proof-walk generator, training harnesses for
-                three modes (standard, resonance, synthetic), and analysis scripts for
-                compressibility, perturbation stability, and representation geometry.
+                in the same codebase, so you can train both and compare. We are now
+                benchmarking resonance against <strong>modern architectures</strong>:
+                LLaMA (RMSNorm + SwiGLU + GQA + RoPE), Qwen3.5 (hybrid linear/full
+                attention + QK norm), and Gemma4 (dual attention + PLE + YOCO KV
+                sharing) — each in dense and MoE variants, with and without resonance.
+                The repo also includes a synthetic lambda-calculus proof-walk generator,
+                training harnesses, and analysis scripts.
               </p>
             </div>
 
@@ -337,15 +340,19 @@ HSA_OVERRIDE_GFX_VERSION=11.0.0 python resonance/train.py ...`}
               <ul className="space-y-2 text-sm text-muted-foreground">
                 <li className="flex gap-2">
                   <code className="bg-muted px-1.5 rounded text-xs shrink-0">resonance/resonance/models.py</code>
-                  <span>StandardTransformer and ResonanceTransformer classes</span>
+                  <span>StandardTransformer and ResonanceTransformer (2017-style)</span>
                 </li>
                 <li className="flex gap-2">
-                  <code className="bg-muted px-1.5 rounded text-xs shrink-0">resonance/train.py</code>
-                  <span>Unified training harness with scale presets</span>
+                  <code className="bg-muted px-1.5 rounded text-xs shrink-0">resonance/resonance/modern/</code>
+                  <span>LLaMA, Qwen3.5, Gemma4 — dense + MoE + resonance variants</span>
                 </li>
                 <li className="flex gap-2">
                   <code className="bg-muted px-1.5 rounded text-xs shrink-0">resonance/experiment_text.py</code>
-                  <span>TinyStories experiment: baseline / resonance / proof-prior</span>
+                  <span>TinyStories experiment harness with --architecture flag</span>
+                </li>
+                <li className="flex gap-2">
+                  <code className="bg-muted px-1.5 rounded text-xs shrink-0">resonance/analysis.py</code>
+                  <span>Checkpoint inspector: PCA, resonance matrix, blend stats</span>
                 </li>
                 <li className="flex gap-2">
                   <code className="bg-muted px-1.5 rounded text-xs shrink-0">resonance/synthetic/</code>
@@ -361,40 +368,38 @@ HSA_OVERRIDE_GFX_VERSION=11.0.0 python resonance/train.py ...`}
             </CardHeader>
             <CardContent className="space-y-4 text-sm text-muted-foreground">
               <p>
-                The ResonanceTransformer subclasses a standard GPT-style decoder. The
-                key differences are all in the input layer and attention mechanism:
+                The core idea: every token receives a <strong>semantic embedding</strong>{" "}
+                and a <strong>phase embedding</strong>. Pairwise phase cosine similarities
+                form a <strong>resonance matrix</strong> that biases attention logits:
               </p>
               <ol className="list-decimal list-inside space-y-2">
                 <li>
-                  <strong>Dual embeddings</strong> — Each token gets{" "}
-                  <code className="bg-muted px-1 rounded">E_sem ∈ ℝ^(V×D)</code> and{" "}
-                  <code className="bg-muted px-1 rounded">E_phase ∈ ℝ^(V×F)</code>{" "}
-                  (F=32).
+                  <strong>Dual embeddings</strong> —{" "}
+                  <code className="bg-muted px-1 rounded">E_sem ∈ ℝ^(V×D)</code> +{" "}
+                  <code className="bg-muted px-1 rounded">E_phase ∈ ℝ^(V×F)</code> (F=32).
                 </li>
                 <li>
-                  <strong>Phase projection</strong> —{" "}
-                  <code className="bg-muted px-1 rounded">W_p ∈ ℝ^(F×D)</code> projects
-                  phase into semantic dimension space.
+                  <strong>Resonance matrix</strong> —{" "}
+                  <code className="bg-muted px-1 rounded">R[i,j] = mean_f cos(φ_i − φ_j)</code>.
                 </li>
                 <li>
-                  <strong>Learnable blend</strong> — A per-dimension sigmoid gate{" "}
-                  <code className="bg-muted px-1 rounded">α</code> interpolates between
-                  the two streams.
+                  <strong>Attention bias</strong> —{" "}
+                  <code className="bg-muted px-1 rounded">attn = QK^T/√d + R·w_r</code>{" "}
+                  before softmax.
                 </li>
                 <li>
-                  <strong>Resonance matrix</strong> — Pairwise cosine similarities of
-                  phase embeddings:{" "}
-                  <code className="bg-muted px-1 rounded">R[i,j] = (1/F) Σ cos(φ_i^f − φ_j^f)</code>.
+                  <strong>Modern backbones</strong> — Resonance is injected into
+                  LLaMA (GQA+RoPE+SwiGLU), Qwen3.5 (hybrid linear attention), and
+                  Gemma4 (dual attention+PLE) architectures.
                 </li>
                 <li>
-                  <strong>Resonance-biased attention</strong> — Attention logits get an
-                  additive bias{" "}
-                  <code className="bg-muted px-1 rounded">R · w_r^(h)</code> per head.
+                  <strong>Linear attention</strong> — For Qwen3.5's recurrent layers,
+                  resonance drives an output gate instead of a logit bias.
                 </li>
               </ol>
               <p>
-                Everything else—causal masking, pre-norm residuals, GELU FFNs—is
-                identical to the standard transformer baseline.
+                Dense and MoE variants of each architecture are implemented in pure
+                PyTorch, extracted faithfully from the vLLM inference codebase.
               </p>
             </CardContent>
           </Card>
@@ -563,7 +568,15 @@ HSA_OVERRIDE_GFX_VERSION=11.0.0 python resonance/train.py ...`}
                 because nothing is converged. The results are meaningful for{" "}
                 <em>relative</em> comparisons and <em>structural properties</em> of
                 representations, but not for absolute language modeling performance.
-                We are now scaling to 20 epochs on GPU.
+                We are now scaling to 20 epochs on GPU and testing modern architectures.
+              </p>
+              <p>
+                <strong>Modern architectures are expensive to extract.</strong> Porting
+                LLaMA, Qwen3.5, and Gemma4 from vLLM's inference-optimized C++/CUDA
+                codebase into clean PyTorch training code is 1,500+ lines per model.
+                The vLLM abstractions (tensor parallelism, paged KV cache, fused MoE
+                kernels) must all be stripped and reimplemented in standard nn.Module
+                form.
               </p>
               <p>
                 <strong>Vectorization matters enormously.</strong> The first

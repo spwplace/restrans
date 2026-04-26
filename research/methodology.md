@@ -153,9 +153,42 @@ Look for cases where resonance "fills in" attention that QK^T misses (e.g., long
 
 ---
 
-## 5. Scaling & Transfer Roadmap
+## 5. Modern Architecture Benchmarks
 
-### 5.1 Scaling Laws (Phase 1)
+We are expanding beyond the 2017-vintage transformer to test resonance against state-of-the-art architectures. All models are implemented in plain PyTorch, extracted faithfully from the vLLM inference codebase.
+
+### 5.1 Architectures Under Test
+
+| Architecture | Key Features | Resonance Adaptation | Dense | MoE |
+|--------------|-------------|----------------------|-------|-----|
+| **LLaMA** | RMSNorm, SwiGLU, GQA, RoPE, sliding window | Resonance bias added to `QK^T/√d` before softmax. Masked to sliding window when applicable. | ✅ | ✅ (pure sparse/dense alternation) |
+| **Qwen3.5** | Hybrid attention (full GQA + linear/Mamba-like), QK norm, attention output gating, SwiGLU, RoPE | Full layers: standard resonance bias. Linear layers: resonance-derived output gating (`gate_i = sigmoid(Σ_j R[i,j]·w_g)`) preserving O(1) memory. | ✅ | ✅ (shared expert + sparse experts) |
+| **Gemma4** | Dual attention (full + sliding), PLE, YOCO KV sharing, QK norm, GELU, RoPE, attention logit soft-capping | Resonance bias before soft-capping. Masked to sliding window. PLE untouched; YOCO KV sharing unaffected (resonance is input-side). | ✅ | ✅ (custom router with per-dim scaling) |
+
+### 5.2 MoE at Small Scale (Tea-Leaf Reading)
+
+MoE is pathological at 5M params, but we run it anyway for signal:
+- **4 experts, top-2 routing**
+- **LLaMA-MoE**: Pure sparse/dense alternation (no shared expert)
+- **Qwen3.5-MoE**: Shared expert + sparse experts with learned blend gate
+- **Gemma4-MoE**: Custom router (RMSNorm → scale → projection) with per-expert output scales
+- Load balancing loss: `α = 0.01`
+
+At 20M+ params, MoE should become meaningful. We will compare dense vs MoE PPL curves to see if resonance differentially helps either.
+
+### 5.3 Resonance in Linear Attention — Three Techniques
+
+Qwen3.5's linear attention layers use a recurrent state-space formulation (no explicit `QK^T` matrix). We test three resonance adaptations:
+
+1. **"skip"**: No resonance on linear layers (control)
+2. **"gate"**: Resonance row-sums drive the attention output gate: `output = attn_out * sigmoid(Σ_j R[i,j]·w_g)`
+3. **"state"**: Phase self-similarity boosts the recurrent state update: `S_t = S_{t-1} + (1 + λ·R[t,t])·k_t^T v_t`
+
+---
+
+## 6. Scaling & Transfer Roadmap
+
+### 6.1 Scaling Laws (Phase 2)
 
 Train at multiple scales with **iso-parameter matching** between Standard and Resonance:
 
@@ -168,7 +201,7 @@ Train at multiple scales with **iso-parameter matching** between Standard and Re
 
 **Key question:** Does the `Resonance / Standard` PPL ratio improve, stay constant, or degrade as scale increases? Many architectural tricks help at small scale but vanish at large scale.
 
-### 5.2 Curriculum Transfer (Phase 1b)
+### 6.2 Curriculum Transfer (Phase 2b)
 
 The `proof_prior` condition tests a specific hypothesis: *synthetic structured reasoning → natural language.*
 
@@ -177,7 +210,7 @@ To make this rigorous:
 2. **Varying pre-train length:** 1, 5, 10, 20 epochs of proof-walks → measure transfer curve.
 3. **Layer-wise transfer:** Freeze lower layers after pre-training, fine-tune only upper layers. If lower layers contain transferable structure, this should work.
 
-### 5.3 Downstream Tasks (Phase 2)
+### 6.3 Downstream Tasks (Phase 3)
 
 PPL is a proxy. Real validation requires:
 - **Story completion:** Given a prompt, generate 100 tokens; score with GPT-4 for grammar, coherence, creativity (TinyStories paper protocol).
@@ -186,27 +219,30 @@ PPL is a proxy. Real validation requires:
 
 ---
 
-## 6. Immediate Action Items
+## 7. Immediate Action Items
 
 ### This Week (While Current Runs Finish)
 1. ✅ Let baseline + resonance + orchestrator run to completion.
-2. ⬜ Add `--tokenizer gpt2` option to `experiment_text.py` for standardized runs.
-3. ⬜ Implement `ResonanceTransformer(use_resonance=False)` ablation flag.
-4. ⬜ Write analysis script to load checkpoints and compute: PCA rank, phase clustering, resonance matrix stats.
+2. ✅ Add `--tokenizer gpt2` option to `experiment_text.py` for standardized runs.
+3. ✅ Implement ablation flags (`use_phase_stream`, `use_resonance_bias`).
+4. ✅ Write `analysis.py` for checkpoint inspection (PCA, resonance matrix, blend stats).
+5. 🔄 Implement modern architectures: LLaMA, Qwen3.5, Gemma4 (dense + MoE + resonance variants).
 
 ### Next Week (Validation)
-5. ⬜ Run same-seed ablation grid: baseline, resonance, resonance_weight=0, blend=1.0 frozen.
-6. ⬜ Run 3 seeds for baseline vs resonance; compute mean ± std.
-7. ⬜ Launch first standardized run (GPT-2 BPE, einygpt-scale).
+6. ⬜ Run same-seed ablation grid: baseline, resonance, resonance_weight=0, blend=1.0 frozen.
+7. ⬜ Run 3 seeds for baseline vs resonance; compute mean ± std.
+8. ⬜ Launch first modern architecture runs: dense LLaMA vs ResonantLlama on TinyStories.
+9. ⬜ Launch first standardized run (GPT-2 BPE, einygpt-scale).
 
 ### Next Month (Scaling)
-8. ⬜ Scaling law sweep (1M → 50M).
-9. ⬜ Full TinyStories training with GPT-2 BPE.
-10. ⬜ GPT-4 story-completion evaluation.
+10. ⬜ Scaling law sweep across all architectures (1M → 50M).
+11. ⬜ Full TinyStories training with GPT-2 BPE.
+12. ⬜ MoE comparison at 20M+ params.
+13. ⬜ GPT-4 story-completion evaluation.
 
 ---
 
-## 7. Summary: Claims We Can Make Now vs Later
+## 8. Summary: Claims We Can Make Now vs Later
 
 | Claim | Evidence Required | Status |
 |-------|-------------------|--------|
@@ -216,3 +252,6 @@ PPL is a proxy. Real validation requires:
 | "Resonance beats standard transformers on standard benchmarks" | GPT-2 BPE, multiple seeds, iso-param | ❌ Not yet tested |
 | "Proof-walk pretraining accelerates language learning" | `proof_prior` condition vs control | 🔄 Running |
 | "Resonance scales favorably" | 1M–50M sweep | ❌ Not yet tested |
+| "Resonance helps modern architectures (LLaMA/Qwen/Gemma)" | Training curves on all three, dense + MoE | 🔄 Implementing |
+| "Resonance works in linear attention layers" | Qwen3.5 linear attention variants (skip/gate/state) | ❌ Not yet tested |
+| "Resonance differentially helps dense vs MoE" | Dense vs MoE PPL curves at same scale | ❌ Not yet tested |
