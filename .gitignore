@@ -5,6 +5,9 @@ __pycache__/
 *.egg-info/
 .pytest_cache/
 
+resonance/outputs
+resonance/resonance/outputs
+
 # Node / build artifacts
 node_modules/
 dist/

@@ -698,7 +698,7 @@ HSA_OVERRIDE_GFX_VERSION=11.0.0 python resonance/train.py ...`}
                 Source code, models, training scripts, and experiment harness only.
                 (~50 MB)
               </p>
-              <a href="./resonance-package.tar.gz" download>
+              <a href={`${import.meta.env.BASE_URL}resonance-package.tar.gz`} download>
                 <Button variant="outline" size="sm" className="w-full gap-2">
                   <Download className="h-4 w-4" />
                   Download
@@ -718,7 +718,7 @@ HSA_OVERRIDE_GFX_VERSION=11.0.0 python resonance/train.py ...`}
               <p className="text-sm text-muted-foreground mb-4">
                 Formatted academic paper with endnotes and figures.
               </p>
-              <a href="./Resonance_Transformers_Paper.docx" download>
+              <a href={`${import.meta.env.BASE_URL}Resonance_Transformers_Paper.docx`} download>
                 <Button variant="outline" size="sm" className="w-full gap-2">
                   <Download className="h-4 w-4" />
                   Download

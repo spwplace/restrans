@@ -4,8 +4,9 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
+    "predev": "node scripts/generate-paper-data.mjs",
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "node scripts/generate-paper-data.mjs && tsc -b && node scripts/prerender.mjs",
     "lint": "eslint .",
     "preview": "vite preview"
   },

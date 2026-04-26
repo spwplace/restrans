@@ -26,3 +26,6 @@ dist-ssr
 # Generated assets in public/
 public/*.png
 public/*.docx
+
+# Generated source files
+src/data/paper-sections.ts

@@ -298,6 +298,18 @@ def get_args() -> argparse.Namespace:
     parser.add_argument("--tokenizer", choices=["word", "gpt2"], default="word", help="Tokenizer type")
     parser.add_argument("--use_phase_stream", type=lambda x: x.lower() == "true", default=True, help="Enable phase embedding stream (resonance only)")
     parser.add_argument("--use_resonance_bias", type=lambda x: x.lower() == "true", default=True, help="Enable resonance attention bias (resonance only)")
+    parser.add_argument(
+        "--architecture",
+        choices=[
+            "standard", "resonance",
+            "llama", "llama_moe", "resonant_llama", "resonant_llama_moe",
+            "qwen3_5", "qwen3_5_moe", "resonant_qwen3_5", "resonant_qwen3_5_moe",
+            "gemma4", "gemma4_moe", "resonant_gemma4", "resonant_gemma4_moe",
+        ],
+        default=None,
+        help="Model architecture (overrides --condition default)",
+    )
+    parser.add_argument("--max_seq_len", type=int, default=None, help="Override max sequence length")
     return parser.parse_args()
 
 
@@ -368,36 +380,75 @@ def main() -> None:
     # ======================================================================
     # Build model
     # ======================================================================
-    if args.condition in ("baseline", "proof_prior"):
-        actual_vocab = getattr(tokenizer, "vocab_size", len(getattr(tokenizer, "word2id", {})))
+    actual_vocab = getattr(tokenizer, "vocab_size", len(getattr(tokenizer, "word2id", {})))
+    max_seq_len = args.max_seq_len or args.seq_len
+
+    # Determine architecture
+    arch = args.architecture
+    if arch is None:
+        if args.condition in ("baseline", "proof_prior"):
+            arch = "standard"
+        else:
+            arch = "resonance"
+
+    # Legacy architectures
+    if arch == "standard":
+        from resonance.config import StandardConfig
+        from resonance.models import StandardTransformer
         config = StandardConfig(
-            vocab_size=actual_vocab,
-            max_seq_len=args.seq_len,
-            embed_dim=args.embed_dim,
-            n_layers=args.n_layers,
-            n_heads=args.n_heads,
-            ff_dim=args.ff_dim,
-            batch_size=args.batch_size,
-            learning_rate=3e-4,
+            vocab_size=actual_vocab, max_seq_len=max_seq_len, embed_dim=args.embed_dim,
+            n_layers=args.n_layers, n_heads=args.n_heads, ff_dim=args.ff_dim,
+            batch_size=args.batch_size, learning_rate=3e-4,
         )
         model = StandardTransformer(config)
-    else:
-        actual_vocab = getattr(tokenizer, "vocab_size", len(getattr(tokenizer, "word2id", {})))
+    elif arch == "resonance":
+        from resonance.config import ResonanceConfig
+        from resonance.models import ResonanceTransformer
         config = ResonanceConfig(
-            vocab_size=actual_vocab,
-            max_seq_len=args.seq_len,
-            embed_dim=args.embed_dim,
-            n_layers=args.n_layers,
-            n_heads=args.n_heads,
-            ff_dim=args.ff_dim,
-            n_frequencies=32,
-            batch_size=args.batch_size,
-            learning_rate=3e-4,
-            phonetic_init=False,
-            use_phase_stream=args.use_phase_stream,
+            vocab_size=actual_vocab, max_seq_len=max_seq_len, embed_dim=args.embed_dim,
+            n_layers=args.n_layers, n_heads=args.n_heads, ff_dim=args.ff_dim,
+            n_frequencies=32, batch_size=args.batch_size, learning_rate=3e-4,
+            phonetic_init=False, use_phase_stream=args.use_phase_stream,
             use_resonance_bias=args.use_resonance_bias,
         )
         model = ResonanceTransformer(config)
+    # Modern architectures
+    elif arch in ("llama", "llama_moe", "resonant_llama", "resonant_llama_moe"):
+        from resonance.modern.llama import LlamaConfig, LlamaTransformer, LlamaMoE, ResonantLlama, ResonantLlamaMoE
+        cfg = LlamaConfig(
+            vocab_size=actual_vocab, max_seq_len=max_seq_len, embed_dim=args.embed_dim,
+            n_layers=args.n_layers, n_heads=args.n_heads, n_kv_heads=args.n_heads // 2,
+            ff_dim=args.ff_dim, use_moe="moe" in arch, use_resonance="resonant" in arch,
+        )
+        model = {
+            "llama": LlamaTransformer, "llama_moe": LlamaMoE,
+            "resonant_llama": ResonantLlama, "resonant_llama_moe": ResonantLlamaMoE,
+        }[arch](cfg)
+    elif arch in ("qwen3_5", "qwen3_5_moe", "resonant_qwen3_5", "resonant_qwen3_5_moe"):
+        from resonance.modern.qwen3_5 import Qwen3_5Config, Qwen3_5Transformer, Qwen3_5MoE, ResonantQwen3_5, ResonantQwen3_5MoE
+        cfg = Qwen3_5Config(
+            vocab_size=actual_vocab, max_seq_len=max_seq_len, embed_dim=args.embed_dim,
+            n_layers=args.n_layers, n_heads=args.n_heads, n_kv_heads=args.n_heads // 2,
+            ff_dim=args.ff_dim, use_moe="moe" in arch, use_resonance="resonant" in arch,
+        )
+        model = {
+            "qwen3_5": Qwen3_5Transformer, "qwen3_5_moe": Qwen3_5MoE,
+            "resonant_qwen3_5": ResonantQwen3_5, "resonant_qwen3_5_moe": ResonantQwen3_5MoE,
+        }[arch](cfg)
+    elif arch in ("gemma4", "gemma4_moe", "resonant_gemma4", "resonant_gemma4_moe"):
+        from resonance.modern.gemma4 import Gemma4Config, Gemma4Transformer, Gemma4MoE, ResonantGemma4, ResonantGemma4MoE
+        cfg = Gemma4Config(
+            vocab_size=actual_vocab, max_seq_len=max_seq_len, embed_dim=args.embed_dim,
+            n_layers=args.n_layers, n_heads=args.n_heads, n_kv_heads=args.n_heads // 2,
+            ff_dim=args.ff_dim, use_moe="moe" in arch, use_resonance="resonant" in arch,
+            use_ple=False,  # disable PLE for small-scale experiments
+        )
+        model = {
+            "gemma4": Gemma4Transformer, "gemma4_moe": Gemma4MoE,
+            "resonant_gemma4": ResonantGemma4, "resonant_gemma4_moe": ResonantGemma4MoE,
+        }[arch](cfg)
+    else:
+        raise ValueError(f"Unknown architecture: {arch}")
 
     # ======================================================================
     # Optional: Resume from checkpoint

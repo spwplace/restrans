@@ -5,40 +5,25 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { BookOpen, Loader2 } from "lucide-react";
-
-const sections = [
-  { file: "resonance_paper_sec00.md", title: "Abstract" },
-  { file: "resonance_paper_sec01.md", title: "1. Introduction" },
-  { file: "resonance_paper_sec02.md", title: "2. Related Work" },
-  { file: "resonance_paper_sec03.md", title: "3. Methodology" },
-  { file: "resonance_paper_sec04.md", title: "4. Experiments & Results" },
-  { file: "resonance_paper_sec05.md", title: "5. Discussion" },
-  { file: "resonance_paper_sec06.md", title: "6. Conclusion" },
-];
+import { paperSections } from "@/data/paper-sections";
 
 export default function Paper() {
-  const [contents, setContents] = useState<Record<string, string>>({});
-  const [loading, setLoading] = useState(true);
+  const [contents] = useState<Record<string, string>>(() => {
+    const map: Record<string, string> = {};
+    for (const sec of paperSections) {
+      map[sec.file] = sec.content;
+    }
+    return map;
+  });
+  const [loading] = useState(false);
   const [activeSection, setActiveSection] = useState("");
 
-  useEffect(() => {
-    async function load() {
-      const results: Record<string, string> = {};
-      for (const sec of sections) {
-        try {
-          const res = await fetch(`./${sec.file}`);
-          results[sec.file] = await res.text();
-        } catch {
-          results[sec.file] = `*Failed to load ${sec.file}*`;
-        }
-      }
-      setContents(results);
-      setLoading(false);
-    }
-    load();
-  }, []);
+  // Content is inlined; no async loading needed
 
   useEffect(() => {
+    if (typeof window === "undefined" || typeof document === "undefined") return;
+    if (loading) return;
+
     const observer = new IntersectionObserver(
       (entries) => {
         for (const entry of entries) {
@@ -50,7 +35,7 @@ export default function Paper() {
       { rootMargin: "-20% 0px -70% 0px" }
     );
 
-    for (const sec of sections) {
+    for (const sec of paperSections) {
       const el = document.getElementById(sec.file);
       if (el) observer.observe(el);
     }
@@ -59,6 +44,7 @@ export default function Paper() {
   }, [loading]);
 
   const scrollTo = (id: string) => {
+    if (typeof document === "undefined") return;
     document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
@@ -91,7 +77,7 @@ export default function Paper() {
             </h3>
             <ScrollArea className="h-[calc(100vh-8rem)]">
               <nav className="space-y-1">
-                {sections.map((sec) => (
+                {paperSections.map((sec) => (
                   <button
                     key={sec.file}
                     onClick={() => scrollTo(sec.file)}
@@ -111,7 +97,7 @@ export default function Paper() {
 
         {/* Content */}
         <div className="lg:col-span-3 space-y-8">
-          {sections.map((sec) => (
+          {paperSections.map((sec) => (
             <section key={sec.file} id={sec.file}>
               <Card>
                 <CardContent className="pt-6">
