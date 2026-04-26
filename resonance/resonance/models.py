@@ -144,6 +144,8 @@ class StandardTransformer(nn.Module):
             nn.init.normal_(module.weight, std=0.02)
             if module.bias is not None:
                 nn.init.zeros_(module.bias)
+        elif isinstance(module, nn.Embedding):
+            nn.init.normal_(module.weight, std=0.02)
         elif isinstance(module, nn.LayerNorm):
             nn.init.ones_(module.weight)
             nn.init.zeros_(module.bias)
@@ -247,7 +249,7 @@ class ResonanceEmbedding(nn.Module):
 
     def _init_random_phases(self) -> None:
         """Initialise phase embeddings from a Gaussian distribution."""
-        nn.init.normal_(self.phase.weight, std=0.3)
+        nn.init.normal_(self.phase.weight, std=self.config.phase_init_std)
 
     def _init_phonetic_phases(self, rhyme_index: dict[str, Any]) -> None:
         """Initialise phase embeddings so rhyming words are close in phase space.
@@ -291,7 +293,7 @@ class ResonanceEmbedding(nn.Module):
             Resonance matrix ``(batch, seq_len, seq_len)`` with values in
             ``[-1, 1]``.
         """
-        if not self.config.use_phase_stream:
+        if not (self.config.use_phase_stream or self.config.use_resonance_bias):
             batch_size, seq_len = token_ids.shape
             return torch.zeros(batch_size, seq_len, seq_len, device=token_ids.device)
         phases = self.phase(token_ids)

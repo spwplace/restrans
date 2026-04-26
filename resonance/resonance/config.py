@@ -40,6 +40,7 @@ class ResonanceConfig:
     n_heads: int = 12
     ff_dim: int = 3072
     n_frequencies: int = 32
+    phase_init_std: float = 0.3
     resonance_blend: float = 0.3
     resonance_attn_weight: float = 0.1
     dropout: float = 0.1
