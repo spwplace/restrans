@@ -29,6 +29,7 @@ from __future__ import annotations
 import random
 from copy import deepcopy
 from dataclasses import dataclass
+from enum import Enum, auto
 from typing import Callable, Dict, List, Optional, Sequence, Set, Tuple
 
 import torch
@@ -53,6 +54,7 @@ from .lambda_generator import (
     normal_form,
     is_well_typed,
 )
+from .mutation_engine import MutatedProgram
 
 
 # =============================================================================
@@ -80,6 +82,23 @@ class Statement:
 
 # Need to import Type here for the dataclass -- but we already have it from lambda_generator
 from .lambda_generator import Type
+
+
+# =============================================================================
+# 1a. Crawl Modes
+# =============================================================================
+
+class CrawlMode(Enum):
+    """Mode for generating statements.
+
+    STRUCTURED: enumerate by complexity classes (type depth, context size).
+    RANDOM:     purely random sampling.
+    HYBRID:     interleave structured and random for coverage + diversity.
+    """
+
+    STRUCTURED = auto()
+    RANDOM = auto()
+    HYBRID = auto()
 
 
 # =============================================================================
@@ -297,9 +316,8 @@ class ProofWalkDataset(Dataset):
     """
     PyTorch Dataset that generates proof walks for contrastive training.
 
-    Each item is a group of k programs that all prove the same statement.
-    The contrastive objective learns to cluster these programs together
-    in embedding space.
+    Supports structured, random, and hybrid crawl modes to explore the
+    space of typing judgements both systematically and with diversity.
 
     Parameters
     ----------
@@ -317,6 +335,10 @@ class ProofWalkDataset(Dataset):
         Seed for reproducibility.
     regenerate_on_epoch : bool
         If True, re-sample groups each epoch (infinite data mode).
+    crawl_mode : CrawlMode
+        How to sample statements.
+    structured_ratio : float
+        For HYBRID mode, fraction of groups drawn from structured enumeration.
 
     Returns
     -------
@@ -336,6 +358,8 @@ class ProofWalkDataset(Dataset):
         strategies: Optional[Sequence[ProofStrategy]] = None,
         generator_seed: Optional[int] = None,
         regenerate_on_epoch: bool = False,
+        crawl_mode: CrawlMode = CrawlMode.HYBRID,
+        structured_ratio: float = 0.5,
     ) -> None:
         self.n_groups = n_groups
         self.programs_per_group = programs_per_group
@@ -344,12 +368,61 @@ class ProofWalkDataset(Dataset):
         self.strategies = list(strategies or DEFAULT_STRATEGIES)
         self.generator = LambdaGenerator(seed=generator_seed)
         self.regenerate_on_epoch = regenerate_on_epoch
+        self.crawl_mode = crawl_mode
+        self.structured_ratio = structured_ratio
         self._rng = random.Random(generator_seed)
+        self._generator_seed = generator_seed
+
+        # Structured enumeration caches
+        self._structured_types: Optional[List[Type]] = None
+        self._structured_contexts: Optional[List[Context]] = None
+        self._structured_cursor = 0
+
+        if crawl_mode in (CrawlMode.STRUCTURED, CrawlMode.HYBRID):
+            self._init_structured_grid()
 
         # Pre-generate all groups if not in infinite mode
         self._groups: Optional[List[Dict]] = None
         if not regenerate_on_epoch:
             self._groups = self._generate_all_groups()
+
+    def _init_structured_grid(self) -> None:
+        """Build a finite grid of types and contexts for structured crawling."""
+        self._structured_types = self.generator.generate_type_grid(
+            max_depth=2, max_size=5
+        )
+        self._structured_contexts = self.generator.generate_context_grid(
+            sizes=(0, 1, 2, 3),
+            type_grid=self._structured_types,
+        )
+        self._rng.shuffle(self._structured_types)
+        self._rng.shuffle(self._structured_contexts)
+
+    def get_state(self) -> dict:
+        """Serialisable state for reproducible dataset regeneration."""
+        import base64
+        return {
+            "n_groups": self.n_groups,
+            "programs_per_group": self.programs_per_group,
+            "max_term_depth": self.max_term_depth,
+            "max_term_size": self.max_term_size,
+            "generator_seed": self._generator_seed,
+            "crawl_mode": self.crawl_mode.name,
+            "structured_ratio": self.structured_ratio,
+            "generator_state": self.generator.get_state(),
+            "rng_state": base64.b64encode(
+                bytes(str(self._rng.getstate()), "utf-8")
+            ).decode("ascii"),
+        }
+
+    def set_state(self, state: dict) -> None:
+        """Restore dataset state."""
+        self._generator_seed = state["generator_seed"]
+        self.crawl_mode = CrawlMode[state["crawl_mode"]]
+        self.structured_ratio = state["structured_ratio"]
+        self.generator.set_state(state["generator_state"])
+        # rng_state restoration from JSON is best-effort; re-seed if needed
+        self._rng = random.Random(self._generator_seed)
 
     def _generate_all_groups(self) -> List[Dict]:
         groups = []
@@ -359,22 +432,73 @@ class ProofWalkDataset(Dataset):
                 groups.append(group)
         return groups
 
+    def _sample_structured_statement(self) -> Tuple[Context, Type]:
+        """Sample a statement from the structured grid."""
+        assert self._structured_contexts is not None
+        assert self._structured_types is not None
+        ctx = self._structured_contexts[
+            self._structured_cursor % len(self._structured_contexts)
+        ]
+        target = self._structured_types[
+            self._structured_cursor % len(self._structured_types)
+        ]
+        self._structured_cursor += 1
+        return ctx, target
+
     def _sample_group(self) -> Optional[Dict]:
         """Generate one statement and k distinct programs satisfying it."""
-        # 1. Sample a random context and target type
-        ctx = self.generator.random_context(size=self._rng.randint(1, 4))
-        target = self.generator._generate_type(depth=0)
+        # 1. Sample context and target type according to crawl_mode
+        use_structured = False
+        if self.crawl_mode == CrawlMode.STRUCTURED:
+            use_structured = True
+        elif self.crawl_mode == CrawlMode.HYBRID:
+            use_structured = self._rng.random() < self.structured_ratio
+
+        if use_structured:
+            ctx, target = self._sample_structured_statement()
+        else:
+            ctx = self.generator.random_context(size=self._rng.randint(0, 4))
+            target = self.generator._generate_type(depth=0)
 
         statement = Statement(tuple(ctx), target)
 
         # 2. Generate a base term
         try:
-            base_term = self.generator.random_term(
-                max_depth=self.max_term_depth,
-                max_size=self.max_term_size,
-                target_type=target,
-                ctx=ctx,
-            )
+            if use_structured:
+                # Structured mode: try enumeration first for small bounds
+                if self.max_term_depth <= 4 and self.max_term_size <= 10:
+                    from .lambda_generator import enumerate_terms
+                    candidates = enumerate_terms(
+                        target, list(ctx), self.max_term_depth, self.max_term_size
+                    )
+                    if candidates:
+                        base_term = self._rng.choice(candidates)
+                    else:
+                        base_term = self.generator.random_term(
+                            max_depth=self.max_term_depth,
+                            max_size=self.max_term_size,
+                            target_type=target,
+                            ctx=ctx,
+                        )
+                else:
+                    base_term = self.generator.random_term(
+                        max_depth=self.max_term_depth,
+                        max_size=self.max_term_size,
+                        target_type=target,
+                        ctx=ctx,
+                    )
+            else:
+                # Random mode: use diverse generation for richer exploration
+                base_term = self.generator.random_term_diverse(
+                    max_depth=self.max_term_depth,
+                    max_size=self.max_term_size,
+                    target_type=target,
+                    ctx=ctx,
+                    strategy_weights={
+                        "shallow_wide": self._rng.random(),
+                        "deep_narrow": self._rng.random(),
+                    },
+                )
         except RuntimeError:
             return None
 
@@ -479,7 +603,76 @@ class ProofWalkDataset(Dataset):
 
 
 # =============================================================================
-# 4. Cross-Group Negative Sampling
+# 4. Mutation-Aware Dataset Wrapper
+# =============================================================================
+
+class MutatedProofWalkDataset:
+    """
+    Wrapper around ProofWalkDataset that applies scheduled mutations.
+
+    Stores the full groups (including Term objects) and mutates them
+    in-place between epochs. This allows programs to accumulate thousands
+    of edits while remaining bisimilar.
+    """
+
+    def __init__(
+        self,
+        base_dataset: ProofWalkDataset,
+        mutation_engine: Any,
+    ) -> None:
+        self.base = base_dataset
+        self.engine = mutation_engine
+        self._groups: List[Dict[str, Any]] = []
+        self._init_groups()
+
+    def _init_groups(self) -> None:
+        """Load all full groups from the base dataset."""
+        for i in range(len(self.base)):
+            group = self.base.get_full_group(i)
+            if group is not None:
+                self._groups.append(group)
+
+    def mutate_all(self, n_mutations: int) -> int:
+        """Apply n_mutations to every program in every group."""
+        total_edits = 0
+        for group in self._groups:
+            mutated_terms = []
+            for term in group["program_terms"]:
+                prog = MutatedProgram(
+                    origin=group["program_terms"][0],
+                    current=term,
+                    ctx=group.get("ctx", []),
+                    target_type=group.get("target_type"),
+                )
+                mutated = self.engine.mutate(prog, n_mutations=n_mutations)
+                mutated_terms.append(mutated.current)
+                total_edits += mutated.edit_count
+            group["program_terms"] = mutated_terms
+            group["programs"] = [t.to_string() for t in mutated_terms]
+        return total_edits
+
+    def __len__(self) -> int:
+        return len(self._groups)
+
+    def __getitem__(self, idx: int) -> Dict[str, Any]:
+        group = self._groups[idx % len(self._groups)]
+        k = len(group["programs"])
+        return {
+            "programs": group["programs"],
+            "statement": group["statement"],
+            "positive_mask": torch.ones(k, k, dtype=torch.bool),
+        }
+
+    def collate_fn(self, batch: List[Dict[str, Any]]) -> Dict[str, Any]:
+        return {
+            "programs": [b["programs"] for b in batch],
+            "statements": [b["statement"] for b in batch],
+            "positive_masks": [b["positive_mask"] for b in batch],
+        }
+
+
+# =============================================================================
+# 5. Cross-Group Negative Sampling
 # =============================================================================
 
 class CrossGroupSampler:

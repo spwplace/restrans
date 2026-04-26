@@ -75,8 +75,12 @@ def main():
     parser.add_argument("--batch_size", type=int, default=32)
     parser.add_argument("--seq_len", type=int, default=64)
     parser.add_argument("--lr", type=float, default=3e-4)
-    parser.add_argument("--device", default="cpu")
+    parser.add_argument("--device", default=None, help="Auto-detects MPS/CUDA/CPU if not set")
     args = parser.parse_args()
+
+    from resonance.device import get_device
+    device = get_device(args.device)
+    args.device = str(device)
 
     torch.set_num_threads(4)
     os.makedirs("/mnt/agents/output/resonance/checkpoints", exist_ok=True)

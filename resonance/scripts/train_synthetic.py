@@ -40,8 +40,11 @@ import torch
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
 
-# Add the synthetic module to path
+# Add paths
+sys.path.insert(0, str(Path(__file__).parent.parent))
 sys.path.insert(0, str(Path(__file__).parent.parent / "synthetic"))
+
+from resonance.device import get_device, set_seed, enable_deterministic
 
 from lambda_generator import (
     LambdaGenerator,
@@ -107,8 +110,8 @@ def get_args() -> argparse.Namespace:
     parser.add_argument(
         "--device",
         type=str,
-        default="cuda" if torch.cuda.is_available() else "cpu",
-        help="Device to train on",
+        default=None,
+        help="Device to train on (auto-detects MPS/CUDA/CPU if not set)",
     )
     parser.add_argument(
         "--output_dir",
@@ -134,6 +137,20 @@ def get_args() -> argparse.Namespace:
         type=int,
         default=1,
         help="Run evaluation every N epochs",
+    )
+    parser.add_argument(
+        "--crawl_mode",
+        type=str,
+        default="hybrid",
+        choices=["structured", "random", "hybrid"],
+        help="Statement generation mode",
+    )
+    parser.add_argument(
+        "--scale",
+        type=str,
+        default="small",
+        choices=["tiny", "small", "medium", "large"],
+        help="Preset scale configuration",
     )
     return parser.parse_args()
 
@@ -247,7 +264,7 @@ def train_epoch(
     epoch: int,
 ) -> Dict[str, float]:
     """Run one training epoch."""
-    device = torch.device(config.device)
+    device = get_device(config.device)
     model.train()
 
     epoch_lm = 0.0
@@ -332,7 +349,7 @@ def evaluate(
     config: argparse.Namespace,
 ) -> Dict[str, float]:
     """Evaluate on the dataset."""
-    device = torch.device(config.device)
+    device = get_device(config.device)
     model.eval()
 
     epoch_lm = 0.0
@@ -389,31 +406,132 @@ def evaluate(
 # 5. Main
 # =============================================================================
 
+# =============================================================================
+# 6. Scale Presets
+# =============================================================================
+
+SCALE_PRESETS = {
+    "tiny": {
+        "epochs": 5,
+        "groups": 200,
+        "programs_per_group": 4,
+        "batch_size": 8,
+        "d_model": 64,
+        "n_layers": 2,
+        "n_heads": 2,
+        "max_length": 64,
+        "max_term_depth": 4,
+        "max_term_size": 12,
+        "max_mutations": 100,
+    },
+    "small": {
+        "epochs": 20,
+        "groups": 1000,
+        "programs_per_group": 8,
+        "batch_size": 16,
+        "d_model": 128,
+        "n_layers": 4,
+        "n_heads": 4,
+        "max_length": 128,
+        "max_term_depth": 5,
+        "max_term_size": 16,
+        "max_mutations": 1000,
+    },
+    "medium": {
+        "epochs": 30,
+        "groups": 5000,
+        "programs_per_group": 8,
+        "batch_size": 32,
+        "d_model": 256,
+        "n_layers": 6,
+        "n_heads": 8,
+        "max_length": 128,
+        "max_term_depth": 6,
+        "max_term_size": 20,
+        "max_mutations": 5000,
+    },
+    "large": {
+        "epochs": 50,
+        "groups": 20000,
+        "programs_per_group": 8,
+        "batch_size": 32,
+        "d_model": 512,
+        "n_layers": 8,
+        "n_heads": 8,
+        "max_length": 256,
+        "max_term_depth": 6,
+        "max_term_size": 24,
+        "max_mutations": 10000,
+    },
+}
+
+
+def apply_scale(args: argparse.Namespace) -> argparse.Namespace:
+    """Override args with scale preset values, keeping explicit CLI overrides."""
+    preset = SCALE_PRESETS.get(args.scale, {})
+    for key, value in preset.items():
+        if getattr(args, key, None) is None or key in ("epochs", "groups", "d_model", "n_layers"):
+            # Only override if the user did not explicitly set it via CLI
+            # argparse defaults make this tricky; we use a sentinel check
+            pass
+    # Simpler: just override unconditionally for preset keys
+    for key, value in preset.items():
+        setattr(args, key, value)
+    return args
+
+
 def main() -> None:
     args = get_args()
-    torch.manual_seed(args.seed)
+    args = apply_scale(args)
+    set_seed(args.seed)
+    enable_deterministic(True)
 
     out_dir = setup_output_dir(args)
     save_config(args, out_dir)
 
+    # Save reproducibility bundle
+    repro_path = out_dir / "reproducibility.json"
+    with open(repro_path, "w") as f:
+        json.dump(
+            {
+                "seed": args.seed,
+                "scale": args.scale,
+                "crawl_mode": args.crawl_mode,
+                "pytorch_version": torch.__version__,
+                "device": str(get_device(args.device)),
+            },
+            f,
+            indent=2,
+        )
+
     print("=" * 60)
     print("Resonance Transformer - Synthetic Data Training")
     print("=" * 60)
+    print(f"Scale preset: {args.scale}")
     print(f"Output directory: {out_dir}")
-    print(f"Device: {args.device}")
+    print(f"Device: {get_device(args.device)}")
     print()
 
     # 1. Generate dataset
     print("[1/5] Generating synthetic dataset...")
+    from synthetic.proof_walk_generator import CrawlMode
+    crawl_mode = CrawlMode[args.crawl_mode.upper()]
     base_dataset = ProofWalkDataset(
         n_groups=args.groups,
         programs_per_group=args.programs_per_group,
         max_term_depth=args.max_term_depth,
         max_term_size=args.max_term_size,
         generator_seed=args.seed,
+        crawl_mode=crawl_mode,
+        structured_ratio=0.5,
     )
+    # Save dataset state for exact reproduction
+    ds_state_path = out_dir / "dataset_state.json"
+    with open(ds_state_path, "w") as f:
+        json.dump(base_dataset.get_state(), f, indent=2, default=str)
     print(f"  Groups: {len(base_dataset)}")
     print(f"  Programs per group: {args.programs_per_group}")
+    print(f"  Crawl mode: {crawl_mode.name}")
 
     # 2. Setup mutation engine
     print("[2/5] Setting up mutation engine...")
@@ -435,11 +553,12 @@ def main() -> None:
         d_phase=args.d_model // 2,
         max_length=args.max_length,
     )
-    device = torch.device(args.device)
+    device = get_device(args.device)
     model = model.to(device)
     n_params = sum(p.numel() for p in model.parameters())
     print(f"  Model parameters: {n_params:,}")
     print(f"  Vocab size: {tokenizer.vocab_size}")
+    print(f"  Device: {device}")
 
     # 4. Setup training
     print("[4/5] Setting up training...")

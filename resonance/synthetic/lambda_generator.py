@@ -341,8 +341,8 @@ class LambdaGenerator:
         Base types available for generation (default: Int, Bool, Unit).
     max_arrow_depth : int
         Maximum nesting depth of arrow types.
-    rng : random.Random
-        Random number generator (for reproducibility).
+    seed : int, optional
+        Random seed for reproducibility.
     """
 
     def __init__(
@@ -353,8 +353,50 @@ class LambdaGenerator:
     ) -> None:
         self.base_types = tuple(base_types)
         self.max_arrow_depth = max_arrow_depth
+        self._seed = seed
         self.rng = random.Random(seed)
         self._type_cache: List[Type] = []
+
+    def get_state(self) -> dict:
+        """Return serialisable state for reproducibility."""
+        return {
+            "seed": self._seed,
+            "version": 1,
+            "base_types": [t.name for t in self.base_types],
+            "max_arrow_depth": self.max_arrow_depth,
+            "rng_state": self.rng.getstate(),
+        }
+
+    def set_state(self, state: dict) -> None:
+        """Restore generator state from a dict returned by get_state."""
+        self._seed = state["seed"]
+        self.max_arrow_depth = state["max_arrow_depth"]
+        self.rng.setstate(state["rng_state"])
+
+    def generate_type_grid(
+        self, max_depth: int = 2, max_size: int = 6
+    ) -> List[Type]:
+        """Generate a structured grid of types up to bounded complexity.
+
+        This is useful for systematically crawling the statement space.
+        """
+        return _enumerate_types(max_depth, max_size)
+
+    def generate_context_grid(
+        self, sizes: Sequence[int] = (0, 1, 2, 3), type_grid: Optional[List[Type]] = None
+    ) -> List[Context]:
+        """Generate structured contexts of various sizes."""
+        if type_grid is None:
+            type_grid = self.generate_type_grid(max_depth=1, max_size=3)
+        contexts: List[Context] = [[]]
+        for size in sizes:
+            if size == 0:
+                continue
+            # Sample combinations with replacement
+            for _ in range(min(50, len(type_grid) ** size)):
+                ctx = [self.rng.choice(type_grid) for _ in range(size)]
+                contexts.append(ctx)
+        return contexts
 
     def _generate_type(self, depth: int = 0) -> Type:
         """Generate a random type with controlled arrow nesting."""
@@ -553,6 +595,52 @@ class LambdaGenerator:
     def random_context(self, size: int = 3) -> Context:
         """Generate a random typing context of given size."""
         return [self._generate_type() for _ in range(size)]
+
+    def random_term_diverse(
+        self,
+        max_depth: int = 5,
+        max_size: int = 20,
+        target_type: Optional[Type] = None,
+        ctx: Optional[Context] = None,
+        strategy_weights: Optional[dict] = None,
+    ) -> Term:
+        """Generate a random term with explicit strategy weighting.
+
+        strategy_weights controls the bias among generation shapes:
+          - 'shallow_wide': favour large terms with low depth
+          - 'deep_narrow':  favour deeply nested terms
+          - 'variable_rich': favour terms using context variables
+          - 'abstraction_rich': favour higher-order terms
+        """
+        ty = target_type or self._generate_type()
+        ctx = ctx or []
+        weights = strategy_weights or {}
+
+        # Adjust depth/size based on strategy
+        eff_depth = max_depth
+        eff_size = max_size
+        if weights.get("deep_narrow", 0) > weights.get("shallow_wide", 0):
+            eff_depth = max_depth + 2
+            eff_size = max_size - 4
+        elif weights.get("shallow_wide", 0) > weights.get("deep_narrow", 0):
+            eff_depth = max(2, max_depth - 2)
+            eff_size = max_size + 6
+
+        for attempt in range(300):
+            if target_type is None:
+                ty = self._generate_type()
+            term = self.generate_term(ty, ctx, eff_depth, eff_size)
+            if term is not None:
+                try:
+                    inferred = typecheck(term, ctx)
+                    if inferred == ty:
+                        return term
+                except TypeError:
+                    pass
+        raise RuntimeError(
+            f"Failed to generate diverse term of type {ty} "
+            f"within depth={eff_depth}, size={eff_size}"
+        )
 
 
 # =============================================================================

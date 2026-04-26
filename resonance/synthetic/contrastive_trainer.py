@@ -427,7 +427,7 @@ class TrainingConfig:
     d_model: int = 128
     n_layers: int = 4
     n_heads: int = 4
-    device: str = "cuda" if torch.cuda.is_available() else "cpu"
+    device: str = "mps" if torch.backends.mps.is_available() else ("cuda" if torch.cuda.is_available() else "cpu")
     log_interval: int = 10
     mutation_schedule: str = "linear"
     max_mutations: int = 1000

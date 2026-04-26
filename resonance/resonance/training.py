@@ -47,10 +47,11 @@ def train_model(
         Dictionary mapping ``"train_loss"``, ``"val_loss"``, and
         ``"val_ppl"`` to lists of per-epoch values.
     """
+    from .device import get_device
     if device is None:
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        device = get_device()
     else:
-        device = torch.device(device)
+        device = get_device(device)
 
     model = model.to(device)
 
