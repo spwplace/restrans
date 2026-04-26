@@ -139,6 +139,30 @@ class WordTokenizer:
         return " ".join(words)
 
 
+class GPT2TokenizerWrapper:
+    """Wrapper around HuggingFace GPT-2 tokenizer for standardized benchmarking."""
+
+    def __init__(self, max_length: int = 256) -> None:
+        from transformers import GPT2Tokenizer
+
+        self._tok = GPT2Tokenizer.from_pretrained("gpt2")
+        self._tok.pad_token = self._tok.eos_token
+        self.vocab_size = self._tok.vocab_size
+        self.pad_id = self._tok.pad_token_id
+        self.max_length = max_length
+        print(f"GPT-2 tokenizer loaded: vocab={self.vocab_size}")
+
+    def train(self, texts: List[str]) -> None:
+        """No-op: GPT-2 tokenizer is pre-trained."""
+        pass
+
+    def encode(self, text: str) -> List[int]:
+        return self._tok.encode(text, add_special_tokens=False)
+
+    def decode(self, ids: List[int]) -> str:
+        return self._tok.decode(ids, skip_special_tokens=True)
+
+
 # =============================================================================
 # 2. Proof-Walk Pre-Training
 # =============================================================================
@@ -270,6 +294,10 @@ def get_args() -> argparse.Namespace:
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--output_dir", default=None)
     parser.add_argument("--save_interval", type=int, default=5)
+    parser.add_argument("--resume", action="store_true", help="Resume from latest checkpoint")
+    parser.add_argument("--tokenizer", choices=["word", "gpt2"], default="word", help="Tokenizer type")
+    parser.add_argument("--use_phase_stream", type=lambda x: x.lower() == "true", default=True, help="Enable phase embedding stream (resonance only)")
+    parser.add_argument("--use_resonance_bias", type=lambda x: x.lower() == "true", default=True, help="Enable resonance attention bias (resonance only)")
     return parser.parse_args()
 
 
@@ -326,7 +354,10 @@ def main() -> None:
     # Load data and build tokenizer
     # ======================================================================
     texts_train, texts_val = load_tinystories(args.train_samples, args.val_samples, args.seed)
-    tokenizer = WordTokenizer(vocab_size=args.vocab_size)
+    if args.tokenizer == "gpt2":
+        tokenizer: WordTokenizer | GPT2TokenizerWrapper = GPT2TokenizerWrapper(max_length=args.seq_len)
+    else:
+        tokenizer = WordTokenizer(vocab_size=args.vocab_size)
     tokenizer.train(texts_train)
 
     train_ds = TinyStoriesDataset(texts_train, tokenizer, seq_len=args.seq_len)
@@ -338,8 +369,9 @@ def main() -> None:
     # Build model
     # ======================================================================
     if args.condition in ("baseline", "proof_prior"):
+        actual_vocab = getattr(tokenizer, "vocab_size", len(getattr(tokenizer, "word2id", {})))
         config = StandardConfig(
-            vocab_size=len(tokenizer.word2id),
+            vocab_size=actual_vocab,
             max_seq_len=args.seq_len,
             embed_dim=args.embed_dim,
             n_layers=args.n_layers,
@@ -350,8 +382,9 @@ def main() -> None:
         )
         model = StandardTransformer(config)
     else:
+        actual_vocab = getattr(tokenizer, "vocab_size", len(getattr(tokenizer, "word2id", {})))
         config = ResonanceConfig(
-            vocab_size=len(tokenizer.word2id),
+            vocab_size=actual_vocab,
             max_seq_len=args.seq_len,
             embed_dim=args.embed_dim,
             n_layers=args.n_layers,
@@ -361,18 +394,36 @@ def main() -> None:
             batch_size=args.batch_size,
             learning_rate=3e-4,
             phonetic_init=False,
+            use_phase_stream=args.use_phase_stream,
+            use_resonance_bias=args.use_resonance_bias,
         )
         model = ResonanceTransformer(config)
+
+    # ======================================================================
+    # Optional: Resume from checkpoint
+    # ======================================================================
+    start_epoch = 0
+    pretrain_history = None
+    text_history = {"train_loss": [], "val_loss": [], "val_ppl": []}
+
+    resume_ckpt = out_dir / "checkpoints" / "latest.pt"
+    if args.resume and resume_ckpt.exists():
+        print(f"\n[Resume] Loading checkpoint: {resume_ckpt}")
+        ckpt = torch.load(resume_ckpt, map_location=device, weights_only=False)
+        model.load_state_dict(ckpt["model_state"])
+        start_epoch = ckpt.get("epoch", 0)
+        text_history = ckpt.get("text_history", text_history)
+        pretrain_history = ckpt.get("pretrain_history", None)
+        print(f"  Resuming from epoch {start_epoch}")
 
     model = model.to(device)
     n_params = sum(p.numel() for p in model.parameters())
     print(f"Parameters: {n_params:,}")
 
     # ======================================================================
-    # Optional: Pre-train on proof-walks
+    # Optional: Pre-train on proof-walks (skip if resuming after pretrain)
     # ======================================================================
-    pretrain_history = None
-    if args.condition in ("proof_prior", "proof_only"):
+    if start_epoch == 0 and args.condition in ("proof_prior", "proof_only"):
         if not SYNTHETIC_AVAILABLE:
             raise RuntimeError("Synthetic pipeline required for proof_prior/proof_only")
         print("\n[Phase 1] Pre-training on synthetic proof-walks...")
@@ -393,16 +444,42 @@ def main() -> None:
     # Train on text
     # ======================================================================
     if args.condition != "proof_only":
-        print("\n[Phase 2] Training on TinyStories...")
-        history = train_model(
-            model=model,
-            config=config,
-            train_dataset=train_ds,
-            val_dataset=val_ds,
-            n_epochs=args.epochs,
-            device=device,
-            log_interval=max(1, len(train_ds) // args.batch_size // 10),
-        )
+        remaining_epochs = args.epochs - start_epoch
+        if remaining_epochs <= 0:
+            print("\n[Resume] All epochs already completed.")
+            history = text_history
+        else:
+            print(f"\n[Phase 2] Training on TinyStories (epochs {start_epoch + 1}–{args.epochs})...")
+
+            def save_checkpoint(epoch: int, model: nn.Module, results: dict) -> None:
+                ckpt_path = out_dir / "checkpoints" / "latest.pt"
+                torch.save(
+                    {
+                        "epoch": epoch,
+                        "model_state": model.state_dict(),
+                        "config": config,
+                        "text_history": results,
+                        "pretrain_history": pretrain_history,
+                        "args": vars(args),
+                    },
+                    ckpt_path,
+                )
+                print(f"  -> Checkpoint saved: {ckpt_path}")
+
+            history = train_model(
+                model=model,
+                config=config,
+                train_dataset=train_ds,
+                val_dataset=val_ds,
+                n_epochs=remaining_epochs,
+                device=device,
+                log_interval=max(1, len(train_ds) // args.batch_size // 10),
+                epoch_end_callback=save_checkpoint,
+            )
+            # Merge with any previously accumulated history
+            for key in ("train_loss", "val_loss", "val_ppl"):
+                text_history[key] = text_history.get(key, []) + history.get(key, [])
+            history = text_history
 
         # Save final
         final_path = out_dir / "checkpoints" / "final.pt"

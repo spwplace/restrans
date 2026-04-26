@@ -23,6 +23,7 @@ def train_model(
     max_grad_norm: float = 1.0,
     weight_decay: float = 0.01,
     log_interval: int = 500,
+    epoch_end_callback: callable | None = None,
 ) -> dict[str, list[float]]:
     """Train a language model and return per-epoch metrics.
 
@@ -147,5 +148,8 @@ def train_model(
         print(f"    Train Loss: {avg_train:.4f}")
         print(f"    Val Loss:   {avg_val:.4f}")
         print(f"    Val PPL:    {val_ppl:.2f}{blend_str}")
+
+        if epoch_end_callback is not None:
+            epoch_end_callback(epoch + 1, model, results)
 
     return results

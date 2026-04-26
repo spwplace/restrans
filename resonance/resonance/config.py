@@ -47,6 +47,8 @@ class ResonanceConfig:
     gradient_accumulation: int = 4
     learning_rate: float = 3e-4
     phonetic_init: bool = False
+    use_phase_stream: bool = True
+    use_resonance_bias: bool = True
 
 
 def count_params(config: StandardConfig | ResonanceConfig) -> int:

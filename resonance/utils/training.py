@@ -126,7 +126,7 @@ def train_model(
 
 def load_checkpoint(model: nn.Module, checkpoint_path: str, device: str = "cpu") -> Dict[str, Any]:
     """Load model from checkpoint."""
-    ckpt = torch.load(checkpoint_path, map_location=device)
+    ckpt = torch.load(checkpoint_path, map_location=device, weights_only=False)
     model.load_state_dict(ckpt["model_state_dict"])
     model.to(device)
     return ckpt

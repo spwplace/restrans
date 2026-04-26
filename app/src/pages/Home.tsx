@@ -29,19 +29,19 @@ const liveStatus = [
     machine: "Apple M2 Max (MPS)",
     status: "running",
     experiment: "Synthetic proof-walk training (vectorized loss v2)",
-    detail: "Epoch 2 / 10 · 4.5M param Resonance model on lambda-calculus proof walks",
+    detail: "Epoch 3 / 10 · 5.7M param dual-stream model · LM loss 1.90 → 0.88",
   },
   {
-    machine: "AMD Ryzen AI 9 HX PRO 370 (ROCm 6.2)",
+    machine: "AMD GPU (ROCm 6.2)",
     status: "running",
-    experiment: "TinyStories language modeling baseline",
-    detail: "Epoch 2 / 20 · 4.5M param Standard transformer · val PPL 292.90 → dropping",
+    experiment: "TinyStories baseline (Standard Transformer)",
+    detail: "Epoch 7 / 20 · 5.53M params · val PPL 292 → 47.99",
   },
   {
-    machine: "AMD (queued)",
-    status: "queued",
-    experiment: "Resonance-Text + Proof-Prior conditions",
-    detail: "Auto-queued after baseline completes (~3 hr)",
+    machine: "AMD CPU (until GPU free)",
+    status: "running",
+    experiment: "TinyStories resonance (dual-stream)",
+    detail: "Epoch 2 / 20 · 5.70M params · val PPL 56.39 after 1 epoch",
   },
 ];
 
@@ -78,39 +78,48 @@ const highlights = [
 
 const roadmap = [
   {
-    phase: "Phase 0 · Now",
+    phase: "Phase 0a · Internal Validation",
     icon: FlaskConical,
     items: [
-      "Validate proof-walk pretraining as a structural prior for language learning",
-      "Compare Standard vs Resonance on TinyStories (100K stories, 4.5M params)",
-      "Measure whether contrastive proof training accelerates downstream convergence",
+      "Confirm resonance vs baseline under identical conditions (same tokenizer, data, hyperparams)",
+      "Same-seed replication to eliminate seed variance (N≥3 seeds)",
+      "Ablate: disable resonance bias, freeze blend, isolate mechanism vs extra params",
     ],
   },
   {
-    phase: "Phase 1 · Scale",
-    icon: TrendingUp,
-    items: [
-      "Scale to 20M–100M parameters with multi-GPU data parallelism",
-      "Train on OpenWebText or C4 subsets (1B+ tokens)",
-      "Curriculum learning: start with proof-walks → TinyStories → general web text",
-    ],
-  },
-  {
-    phase: "Phase 2 · Augment",
-    icon: Layers,
-    items: [
-      "Resonance attention in larger architectures (LLaMA-style, grouped-query, SwiGLU)",
-      "Multi-modal resonance: vision patches + text tokens sharing a phase stream",
-      "Tool-use & reasoning: proof-walk structure as an explicit chain-of-thought prior",
-    ],
-  },
-  {
-    phase: "Phase 3 · Mechanistic",
+    phase: "Phase 0b · External Comparability",
     icon: Target,
     items: [
-      "Intervene on phase embeddings during inference to steer structural behaviour",
-      "Quantize phase to 1–2 bit and measure reasoning degradation vs semantic",
-      "Map proof-walk embedding clusters to interpretable proof strategies",
+      "Switch to GPT-2 BPE tokenizer for direct comparison with einygpt & TinyStories paper",
+      "Iso-parameter matching: adjust dims so resonance and baseline have identical param counts",
+      "Reproduce published baselines at 4–7M scale to establish an absolute PPL anchor",
+    ],
+  },
+  {
+    phase: "Phase 1 · Mechanistic Understanding",
+    icon: Brain,
+    items: [
+      "PCA / t-SNE on phase vs semantic embeddings — what structure does phase capture?",
+      "Intervention: zero-out phase or semantic at inference to measure contribution",
+      "Visualize resonance matrix R[i,j] — does it encode syntax, phonetics, or long-range ties?",
+    ],
+  },
+  {
+    phase: "Phase 2 · Scale & Transfer",
+    icon: TrendingUp,
+    items: [
+      "Scaling law sweep: 1M → 5M → 20M → 50M params on full TinyStories",
+      "Curriculum transfer: proof-walks → TinyStories → OpenWebText/C4 subsets",
+      "Downstream evaluation: story completion (GPT-4 scoring), BLiMP grammaticality",
+    ],
+  },
+  {
+    phase: "Phase 3 · Augment & Deploy",
+    icon: Layers,
+    items: [
+      "Resonance attention in LLaMA-style architectures (RMSNorm, SwiGLU, GQA, RoPE)",
+      "1–2 bit quantization of phase stream; asymmetric quantization of semantic stream",
+      "Multi-modal resonance: vision patches + text sharing a unified phase space",
     ],
   },
 ];

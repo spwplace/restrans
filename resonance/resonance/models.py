@@ -291,6 +291,9 @@ class ResonanceEmbedding(nn.Module):
             Resonance matrix ``(batch, seq_len, seq_len)`` with values in
             ``[-1, 1]``.
         """
+        if not self.config.use_phase_stream:
+            batch_size, seq_len = token_ids.shape
+            return torch.zeros(batch_size, seq_len, seq_len, device=token_ids.device)
         phases = self.phase(token_ids)
         # Broadcast: (B, S, 1, F) - (B, 1, S, F) -> (B, S, S, F)
         phase_diff = phases.unsqueeze(2) - phases.unsqueeze(1)
@@ -313,11 +316,14 @@ class ResonanceEmbedding(nn.Module):
         batch_size, seq_len = token_ids.shape
 
         sem = self.semantic(token_ids)
-        ph = self.phase(token_ids)
-        ph_proj = self.phase_proj(ph)
 
-        blend = torch.sigmoid(self.blend)
-        embeddings = (1 - blend) * sem + blend * ph_proj
+        if self.config.use_phase_stream:
+            ph = self.phase(token_ids)
+            ph_proj = self.phase_proj(ph)
+            blend = torch.sigmoid(self.blend)
+            embeddings = (1 - blend) * sem + blend * ph_proj
+        else:
+            embeddings = sem
 
         positions = torch.arange(seq_len, device=token_ids.device)
         embeddings = embeddings + self.position(positions)
@@ -338,6 +344,7 @@ class ResonanceAttention(nn.Module):
 
     def __init__(self, config: ResonanceConfig) -> None:
         super().__init__()
+        self.config = config
         self.n_heads = config.n_heads
         self.head_dim = config.embed_dim // config.n_heads
         self.scale = self.head_dim**-0.5
@@ -377,9 +384,10 @@ class ResonanceAttention(nn.Module):
 
         attn = torch.matmul(q, k.transpose(-2, -1)) * self.scale
         # Add resonance bias: broadcast across heads with per-head weights
-        attn = attn + resonance.unsqueeze(1) * self.resonance_weight.view(
-            1, self.n_heads, 1, 1
-        )
+        if self.config.use_resonance_bias:
+            attn = attn + resonance.unsqueeze(1) * self.resonance_weight.view(
+                1, self.n_heads, 1, 1
+            )
 
         if mask is not None:
             attn = attn.masked_fill(mask == 0, float("-inf"))
