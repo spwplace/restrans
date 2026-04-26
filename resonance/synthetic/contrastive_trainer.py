@@ -41,22 +41,10 @@ from .mutation_engine import BisimilarMutation, MutatedProgram, training_schedul
 
 class ContrastiveGroupLoss(nn.Module):
     """
-    Contrastive loss for proof groups.
+    Fast vectorized contrastive loss for proof groups.
 
-    For a group of k programs, all pairs within the group are "positive"
-    (should be close in embedding space). Programs from different groups
-    are "negative" (should be far apart).
-
-    Supports InfoNCE and triplet-margin variants.
-
-    Parameters
-    ----------
-    temperature : float
-        Temperature for similarity scaling (lower = harder contrast).
-    margin : float
-        Margin for triplet loss (if used).
-    loss_type : str
-        "infonce" or "triplet".
+    Uses a fully-vectorized InfoNCE implementation that replaces the
+    O(N*k^2) Python loops with matrix operations on the GPU.
     """
 
     def __init__(
@@ -87,7 +75,6 @@ class ContrastiveGroupLoss(nn.Module):
             True where (i,j) is a positive pair (same group).
         negative_mask : torch.Tensor [N, N] bool, optional
             True where (i,j) is a negative pair (different groups).
-            If None, inferred as ~positive_mask with diagonal excluded.
 
         Returns
         -------
@@ -96,7 +83,6 @@ class ContrastiveGroupLoss(nn.Module):
         """
         if negative_mask is None:
             negative_mask = ~positive_mask
-            # Exclude self-similarity from negatives
             diag = torch.arange(embeddings.size(0), device=embeddings.device)
             negative_mask[diag, diag] = False
 
@@ -117,35 +103,27 @@ class ContrastiveGroupLoss(nn.Module):
         positive_mask: torch.Tensor,
         negative_mask: torch.Tensor,
     ) -> torch.Tensor:
-        """
-        InfoNCE-style loss: for each anchor, positives are pulled toward it
-        and negatives are pushed away via softmax over all pairs.
-        """
-        # Create labels: for each anchor, positives are 1, negatives are 0
-        # We want similarity[anchor, positive] >> similarity[anchor, negative]
+        """Vectorized InfoNCE: log(exp(pos) / sum(exp(all_valid)))."""
         N = similarity.size(0)
-        loss = torch.tensor(0.0, device=similarity.device)
-        count = 0
+        diag_mask = torch.eye(N, device=similarity.device, dtype=torch.bool)
 
-        for i in range(N):
-            pos_indices = torch.where(positive_mask[i])[0]
-            neg_indices = torch.where(negative_mask[i])[0]
-            if pos_indices.numel() == 0 or neg_indices.numel() == 0:
-                continue
+        # Exclude self-similarity
+        sim = similarity.masked_fill(diag_mask, float("-inf"))
+        sim_exp = torch.exp(sim)
 
-            # For each positive, compute InfoNCE against all negatives
-            pos_sims = similarity[i, pos_indices]
-            neg_sims = similarity[i, neg_indices]
-            for pos_sim in pos_sims:
-                logits = torch.cat([pos_sim.unsqueeze(0), neg_sims])
-                # Target is index 0 (the positive)
-                target = torch.zeros(1, dtype=torch.long, device=logits.device)
-                loss += F.cross_entropy(logits.unsqueeze(0), target)
-                count += 1
+        # Sum over positives and all valid entries
+        pos_sum = (sim_exp * positive_mask.float()).sum(dim=1)  # [N]
+        valid_sum = (sim_exp * (~diag_mask).float()).sum(dim=1)  # [N]
 
-        if count == 0:
-            return torch.tensor(0.0, device=similarity.device, requires_grad=True)
-        return loss / count
+        has_pos = positive_mask.sum(dim=1) > 0
+        has_neg = negative_mask.sum(dim=1) > 0
+        valid = has_pos & has_neg
+
+        if valid.sum() == 0:
+            return torch.tensor(0.0, device=sim.device, requires_grad=True)
+
+        loss = -torch.log((pos_sum[valid] + 1e-8) / (valid_sum[valid] + 1e-8))
+        return loss.mean()
 
     def _triplet_loss(
         self,
@@ -153,30 +131,23 @@ class ContrastiveGroupLoss(nn.Module):
         positive_mask: torch.Tensor,
         negative_mask: torch.Tensor,
     ) -> torch.Tensor:
-        """
-        Triplet margin loss: ensure sim(anchor, positive) > sim(anchor, negative) + margin.
-        """
-        N = similarity.size(0)
-        loss = torch.tensor(0.0, device=similarity.device)
-        count = 0
+        """Vectorized triplet margin loss."""
+        # Compute mean positive and mean negative similarity per anchor
+        pos_counts = positive_mask.sum(dim=1, keepdim=True).clamp(min=1)
+        neg_counts = negative_mask.sum(dim=1, keepdim=True).clamp(min=1)
 
-        for i in range(N):
-            pos_indices = torch.where(positive_mask[i])[0]
-            neg_indices = torch.where(negative_mask[i])[0]
-            if pos_indices.numel() == 0 or neg_indices.numel() == 0:
-                continue
+        pos_mean = (similarity * positive_mask.float()).sum(dim=1) / pos_counts.squeeze(1)
+        neg_mean = (similarity * negative_mask.float()).sum(dim=1) / neg_counts.squeeze(1)
 
-            pos_sims = similarity[i, pos_indices]
-            neg_sims = similarity[i, neg_indices]
-            # All pairs of pos/neg
-            for pos_sim in pos_sims:
-                for neg_sim in neg_sims:
-                    loss += F.relu(neg_sim - pos_sim + self.margin)
-                    count += 1
+        has_pos = positive_mask.sum(dim=1) > 0
+        has_neg = negative_mask.sum(dim=1) > 0
+        valid = has_pos & has_neg
 
-        if count == 0:
+        if valid.sum() == 0:
             return torch.tensor(0.0, device=similarity.device, requires_grad=True)
-        return loss / count
+
+        loss = F.relu(neg_mean[valid] - pos_mean[valid] + self.margin)
+        return loss.mean()
 
 
 class DualContrastiveLoss(nn.Module):
