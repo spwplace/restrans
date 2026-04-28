@@ -566,6 +566,16 @@ class ResonanceAttention(nn.Module):
             self.register_parameter("structural_head_weight", None)
         self.dropout = nn.Dropout(config.dropout)
 
+        self.relation_value_mode = config.relation_value_mode
+        if self.relation_value_mode == "additive":
+            self.relation_value_proj = nn.Linear(config.embed_dim, config.embed_dim, bias=False)
+            self.relation_value_gate = nn.Parameter(torch.tensor(0.0))
+        elif self.relation_value_mode == "none":
+            self.relation_value_proj = None
+            self.register_parameter("relation_value_gate", None)
+        else:
+            raise ValueError(f"unknown relation_value_mode: {self.relation_value_mode}")
+
         self.phase_condition_qk = config.phase_condition_qk
         if self.phase_condition_qk == "film":
             self.q_film = nn.Linear(config.n_frequencies, 2 * config.embed_dim)
@@ -697,6 +707,14 @@ class ResonanceAttention(nn.Module):
         attn = self.dropout(attn)
 
         out = torch.matmul(attn, v).transpose(1, 2).reshape(batch_size, seq_len, -1)
+        if self.relation_value_mode == "additive":
+            relation_logits = self._prepare_resonance_bias(resonance, mask)
+            if mask is not None:
+                relation_logits = relation_logits.masked_fill(mask.squeeze(0) == 0, float("-inf"))
+            relation_weights = F.softmax(relation_logits, dim=-1)
+            relation_values = self.relation_value_proj(x)
+            relation_context = torch.matmul(relation_weights, relation_values)
+            out = out + torch.tanh(self.relation_value_gate) * relation_context
         return self.out_proj(out)
 
 

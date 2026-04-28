@@ -383,6 +383,7 @@ def train_condition(
             "phase_update_mode": getattr(config, "phase_update_mode", None),
             "phase_condition_qk": getattr(config, "phase_condition_qk", None),
             "n_structural_heads": getattr(config, "n_structural_heads", None),
+            "relation_value_mode": getattr(config, "relation_value_mode", None),
             "attention_variant": getattr(config, "attention_variant", None),
             "dispersion_lambda": args.dispersion_lambda,
             "phase_contrastive_weight": phase_contrastive_weight,

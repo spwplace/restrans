@@ -19,7 +19,7 @@ def test_kernel_phase_combinations() -> None:
     B, L = 2, 8
     vocab = 100
 
-    kernels = ["cosine", "cosine_weighted", "dot", "rbf", "laplace", "bilinear",
+    kernels = ["cosine", "cosine_weighted", "harmonic_cosine", "pair_mlp", "dot", "rbf", "laplace", "bilinear",
                "complex_magnitude", "complex_real", "attention"]
     phases = ["real", "fourier_fixed", "complex_angle", "hierarchical", "factorized"]
 
@@ -39,6 +39,10 @@ def test_kernel_phase_combinations() -> None:
             if k in ("rbf", "laplace"):
                 k_kwargs["gamma"] = 1.0
             elif k == "bilinear":
+                k_kwargs["rank"] = 8
+            elif k == "harmonic_cosine":
+                k_kwargs["rank"] = 4
+            elif k == "pair_mlp":
                 k_kwargs["rank"] = 8
             elif k == "attention":
                 k_kwargs["temperature"] = 1.0
@@ -185,6 +189,25 @@ def test_interpretability() -> None:
         model(x)
 
 
+def test_relation_value_forward() -> None:
+    """Relation-value routing must preserve logits shape."""
+    from resonance.models import ResonanceTransformer
+
+    config = ResonanceConfig(
+        vocab_size=100,
+        embed_dim=64,
+        n_layers=2,
+        n_heads=4,
+        n_frequencies=16,
+        relation_value_mode="additive",
+    )
+    model = ResonanceTransformer(config)
+    x = torch.randint(0, 100, (2, 8))
+    out = model(x)
+    logits = out["logits"] if isinstance(out, dict) else out
+    assert logits.shape == (2, 8, 100)
+
+
 def test_per_layer_config() -> None:
     """Per-layer kernel/bias overrides must be applied correctly."""
     from resonance.models import ResonanceTransformer
@@ -215,5 +238,6 @@ if __name__ == "__main__":
     test_init_presets()
     test_hard_negatives()
     test_interpretability()
+    test_relation_value_forward()
     test_per_layer_config()
     print("=== ALL SMOKE TESTS PASSED ===")

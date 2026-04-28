@@ -20,6 +20,50 @@ uv sync
 bash scripts/setup_external_deps.sh
 ```
 
+## Entry Point Smoke Test
+
+Before handing the repo to a new machine/operator:
+
+```bash
+bash scripts/smoke_all_entrypoints.sh
+```
+
+The latest local result is recorded in
+[`SMOKE_TEST_REPORT.md`](SMOKE_TEST_REPORT.md).
+
+## Architecture Matrix Smoke
+
+To exercise every registered architecture variant through the same tiny local
+probe harness:
+
+```bash
+DEVICE=cpu SEEDS=901 EPOCHS=1 bash scripts/run_architecture_matrix_smoke.sh
+```
+
+The script writes a timestamped output directory under `resonance/outputs/`
+and generates `summary.md` plus `summary.json`.
+
+For a larger local nextop run that keeps MPS busy across the broader synthetic
+and code-equivalence probe set:
+
+```bash
+DEVICE=mps bash scripts/run_architecture_matrix_nextop.sh
+```
+
+For the current focused signal matrix, use the post-ListOps launcher. This skips
+weak canaries and spends compute on unification, cap matching, algebraic
+protocols, graph aliasing, COGS generalization, and a small EquiBench slice:
+
+```bash
+DEVICE=mps bash scripts/run_signal_matrix_nextop.sh
+```
+
+To follow that with the currently implemented literature-regime sweeps:
+
+```bash
+DEVICE=mps bash scripts/run_literature_regime_nextop.sh
+```
+
 Large datasets are not committed. See `dataset-lake.md` for staged datasets and
 download notes. The external cap-matching reference implementation is cloned to
 `external/reu_unif` by `scripts/setup_external_deps.sh`; the training probes do
@@ -97,4 +141,12 @@ export PYTHONPATH=resonance
 uv run python resonance/build_lab_notebook.py \
   --root resonance/outputs \
   --output_dir resonance/outputs/lab_notebook_hyper_live
+```
+
+For a single architecture/signal run root, generate heatmaps and a compact
+matrix report with:
+
+```bash
+uv run python resonance/plot_matrix_results.py \
+  --root resonance/outputs/<run-root>
 ```

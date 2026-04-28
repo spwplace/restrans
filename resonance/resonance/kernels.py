@@ -4,8 +4,8 @@ The default kernel is a cosine-difference kernel (Fourier-like):
     R[i,j] = mean_f cos(φ_i^f - φ_j^f)
 
 This module provides alternative kernels that can be swapped via config:
-    cosine, cosine_weighted, dot, rbf, laplace, bilinear,
-    complex_magnitude, complex_real.
+    cosine, harmonic_cosine, cosine_weighted, dot, rbf, laplace,
+    bilinear, complex_magnitude, complex_real.
 
 All kernels are nn.Module subclasses so learned parameters (weights,
 bilinear forms, etc.) participate in gradient descent automatically.
@@ -45,6 +45,37 @@ class CosineKernel(ResonanceKernel):
         return torch.cos(phase_diff).mean(dim=-1)
 
 
+class HarmonicCosineKernel(ResonanceKernel):
+    """Multi-harmonic cosine-difference kernel.
+
+    The default cosine kernel uses only the fundamental phase difference.
+    This variant computes a compact Fourier-style relation basis:
+
+        R[i,j] = Σ_h w_h · mean_f cos(h · (φ_i^f - φ_j^f))
+
+    where ``h`` ranges from 1 to ``n_harmonics``.  It keeps the same scalar
+    relation-matrix interface while testing whether higher harmonics carry
+    useful structural aliasing / periodicity information.
+    """
+
+    def __init__(self, n_frequencies: int, rank: int | None = None) -> None:
+        super().__init__()
+        del n_frequencies
+        n_harmonics = rank or 4
+        self.register_buffer(
+            "harmonics",
+            torch.arange(1, n_harmonics + 1, dtype=torch.float32),
+        )
+        self.raw_weights = nn.Parameter(torch.zeros(n_harmonics))
+
+    def forward(self, phases: torch.Tensor) -> torch.Tensor:
+        phase_diff = phases.unsqueeze(2) - phases.unsqueeze(1)
+        harmonic_diff = phase_diff.unsqueeze(-1) * self.harmonics.view(1, 1, 1, 1, -1)
+        harmonic_terms = torch.cos(harmonic_diff).mean(dim=-2)  # [B, S, S, H]
+        weights = F.softmax(self.raw_weights, dim=0)
+        return (harmonic_terms * weights.view(1, 1, 1, -1)).sum(dim=-1)
+
+
 class WeightedCosineKernel(ResonanceKernel):
     """Learned per-frequency weighted cosine kernel.
 
@@ -62,6 +93,38 @@ class WeightedCosineKernel(ResonanceKernel):
         phase_diff = phases.unsqueeze(2) - phases.unsqueeze(1)
         cos_terms = torch.cos(phase_diff)  # [B, S, S, F]
         return (cos_terms * weights.view(1, 1, 1, -1)).sum(dim=-1)
+
+
+class PairMLPKernel(ResonanceKernel):
+    """Learned pair-specific relation kernel.
+
+    This is intentionally small but more expressive than fixed distance or
+    cosine kernels. It constructs each relation from both endpoint phase
+    vectors, their difference, and their elementwise interaction.
+    """
+
+    def __init__(
+        self,
+        n_frequencies: int,
+        rank: int = 64,
+        temperature: float = 1.0,
+        **_: object,
+    ) -> None:
+        super().__init__()
+        hidden = max(4, int(rank))
+        self.temperature = max(float(temperature), 1e-6)
+        self.net = nn.Sequential(
+            nn.Linear(n_frequencies * 4, hidden),
+            nn.GELU(),
+            nn.Linear(hidden, 1),
+        )
+
+    def forward(self, phases: torch.Tensor) -> torch.Tensor:
+        batch, seq_len, freq = phases.shape
+        left = phases.unsqueeze(2).expand(batch, seq_len, seq_len, freq)
+        right = phases.unsqueeze(1).expand(batch, seq_len, seq_len, freq)
+        features = torch.cat([left, right, left - right, left * right], dim=-1)
+        return self.net(features).squeeze(-1) / self.temperature
 
 
 class DotKernel(ResonanceKernel):
@@ -242,7 +305,9 @@ class DirectionalComplexKernel(ResonanceKernel):
 
 _KERNEL_REGISTRY: dict[str, Callable[..., ResonanceKernel]] = {
     "cosine": CosineKernel,
+    "harmonic_cosine": HarmonicCosineKernel,
     "cosine_weighted": WeightedCosineKernel,
+    "pair_mlp": PairMLPKernel,
     "dot": DotKernel,
     "rbf": RBFKernel,
     "laplace": LaplaceKernel,

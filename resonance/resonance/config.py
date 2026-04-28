@@ -81,7 +81,7 @@ class ResonanceConfig:
     phase_condition_qk: str = "none"         # none | film
     n_structural_heads: int = 0              # heads whose logits come from phase structure
     structural_head_scale: float = 1.0
-    relation_value_mode: str = "none"        # reserved: none | additive
+    relation_value_mode: str = "none"        # none | additive
     aux_phase_loss_weight: float = 0.0
 
 
