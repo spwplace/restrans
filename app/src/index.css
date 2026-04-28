@@ -87,7 +87,11 @@
 
   .nav-scroll {
     @apply flex min-w-0 items-center gap-1 overflow-x-auto pb-1;
-    scrollbar-width: thin;
+    scrollbar-width: none;
+  }
+
+  .nav-scroll::-webkit-scrollbar {
+    display: none;
   }
 
   .nav-link {
