@@ -193,7 +193,7 @@ def run_ablation(
 
             if cfg["type"] == "standard":
                 # Build iso-parameter standard model
-                _, model, std_config, res_config = build_iso_pair(
+                model, _, std_config, _ = build_iso_pair(
                     base_embed_dim=args.embed_dim,
                     n_layers=args.n_layers,
                     n_heads=args.n_heads,

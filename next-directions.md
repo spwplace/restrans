@@ -89,6 +89,58 @@ The plan is therefore to build around topology-bearing data:
   on the ordinary residual stream, measured by feature purity and causal
   faithfulness, not vibes.
 
+## Track 1b: Intrinsic Interpretability and Geometry
+
+Recent interpretability work points in two useful directions for this project:
+
+- Do not rely only on post-hoc SAEs.  Add interpretability pressure during
+  training and check whether the performance/interpretability tradeoff is real
+  for phase/resonance models.
+- Do not assume every useful representation is sparse and axis-aligned.  The
+  phase stream may be cleanly sparse on formal/syntactic tasks, but natural
+  language and multimodal structure may be better described as low-dimensional
+  regions, convex mixtures, or archetype coordinates.
+
+### Built-In Interpretability Experiments
+
+- Add sparse penalties to the structural path:
+  - activation L1 or Hoyer sparsity on raw phase,
+  - activation L1 or Hoyer sparsity on projected phase,
+  - top-k or sparse-gated resonance features,
+  - sparse contrastive projection heads for same-structure groups.
+- Compare four training regimes:
+  - ordinary standard transformer,
+  - ordinary resonance transformer,
+  - standard transformer with matched sparse bottleneck,
+  - resonance transformer with sparse structural bottleneck.
+- Evaluate the Pareto frontier:
+  - task accuracy/loss,
+  - phase/resonance label purity,
+  - causal patching faithfulness,
+  - SAE feature purity,
+  - probe sparsity and stability across seeds.
+
+### Geometry Experiments
+
+- Fit archetype/hull probes to phase vectors, resonance rows, and residual
+  stream states.
+- Measure whether examples occupy:
+  - sparse feature axes,
+  - low-rank subspaces,
+  - convex mixtures of a small archetype set,
+  - graph/spectral neighborhoods induced by known structure.
+- Use this as a guardrail: if phase is not monosemantic, that is not
+  automatically a failure.  It may still be interpretable as geometry.
+
+### Success Criteria
+
+- Intrinsic sparsity improves interpretability without destroying the structural
+  task signal.
+- Phase/resonance geometry is simpler than residual-stream geometry under at
+  least one faithful probe family.
+- The best probe family is allowed to vary by modality: formal programs,
+  syntax, semantic graphs, stories, and code do not need the same geometry.
+
 ## Track 2: Synthetic Topological Priors to Natural Language
 
 ### Representation
@@ -346,3 +398,122 @@ either. The next serious architecture work should compare:
   - graph features concatenated to token embeddings,
   - shortest-path / Laplacian positional encodings,
   - relation-aware attention bias.
+
+### 2026-04-26: Regime Probe Before Ablation
+
+The ICLR 2026 representation-dispersion paper suggests a useful gate for this
+project: before running architecture ablations, measure whether the task regime
+is learnable, non-saturated, and geometrically active.
+
+Added:
+
+```bash
+.venv/bin/python resonance/regime_probe.py \
+  --output_dir resonance/outputs/regime_probe_medium \
+  --device cpu \
+  --epochs 5 \
+  --train_examples 256 \
+  --val_examples 128 \
+  --seeds 11 23 37 \
+  --conditions standard,resonance_full,resonance_full_normalized,bias_only_normalized
+```
+
+Current result:
+
+```text
+Verdict: weak: behavior improves but hidden geometry is not label-separated
+
+standard:                  acc +0.0521 over majority, loss gain +0.0010, label gap -0.1716
+resonance_full:            acc +0.0677 over majority, loss gain +0.0213, label gap -0.0849
+resonance_full_normalized: acc +0.0677 over majority, loss gain +0.0213, label gap -0.0849
+bias_only_normalized:      acc +0.0781 over majority, loss gain +0.0156, label gap -0.0983
+```
+
+Interpretation: this temporal-query regime is not yet a trustworthy ablation
+target. It is slightly learnable, but the hidden states are not separating the
+answer structure cleanly. The next objective is therefore regime discovery:
+
+- vary data generators before varying architecture;
+- require accuracy above majority, meaningful loss reduction, and positive
+  geometry separation before claiming a benchmark is useful;
+- test push-away and squeeze dispersion losses as a sensitivity check;
+- only then run iso-parameter resonance-vs-baseline comparisons.
+
+### 2026-04-26: Aliased Graph Regime Search
+
+Added an aliased graph-walk generator and probe:
+
+```bash
+.venv/bin/python resonance/graph_alias_probe.py \
+  --output_dir resonance/outputs/graph_alias_probe_shared_vocab_1step_8n_e3 \
+  --device cpu \
+  --epochs 3 \
+  --train_examples 512 \
+  --val_examples 256 \
+  --n_graphs 32 \
+  --n_nodes 8 \
+  --alias_pool_size 96 \
+  --out_degree 2 \
+  --walk_length 4 \
+  --query_steps 1 \
+  --max_length 256 \
+  --conditions standard,resonance_full,bias_only_normalized \
+  --val_graphs new
+```
+
+The generator supports three validation splits:
+
+- `same`: held-out walks over the same latent graphs and aliases.
+- `same_aliases_new_edges`: same alias vocabulary/grouping, rewired edges.
+- `new`: new latent graphs. With `alias_pool_size > 0`, train/validation draw
+  aliases from the same token pool but use new alias groupings; this avoids the
+  untrained-token failure of fully fresh random aliases.
+
+Boundary results:
+
+```text
+known graph / held-out walks:      saturated at 1.0000 acc for every condition
+same aliases / rewired edges:      saturated at 1.0000 acc for every condition
+new aliases with no shared pool:   near chance or worse; token generalization bottleneck
+shared vocab / new 16-node graph:  near chance; overfits training graph patterns
+shared vocab / new 8-node graph:   first nontrivial band
+```
+
+Best current nontrivial band, single seed:
+
+```text
+shared vocab, new 8-node graphs, direct edge query, 3 epochs
+
+standard:             acc 0.4883, acc-maj -0.0117, label gap -0.7234
+resonance_full:       acc 0.6445, acc-maj +0.1445, label gap +0.9742
+bias_only_normalized: acc 0.6602, acc-maj +0.1602, label gap +1.0954
+```
+
+Caveat: validation cross-entropy still worsens despite accuracy and geometry
+improving. That means this is **not yet a passed regime**. It is, however, the
+first place where resonance/bias variants separate behavior and hidden geometry
+from standard without saturating.
+
+Three-seed check with dispersion push-away (`dispersion_lambda=0.01`) does **not**
+yet hold:
+
+```text
+standard:             acc 0.4805 +/- 0.0440, acc-maj -0.0195, label gap -0.7673
+resonance_full:       acc 0.5638 +/- 0.1152, acc-maj +0.0638, label gap -0.2492
+bias_only_normalized: acc 0.5911 +/- 0.0867, acc-maj +0.0911, label gap -0.2015
+```
+
+Per-epoch logging did find one seed where `resonance_full` briefly aligns
+behavior and loss (`epoch 2: acc 0.6523, val loss 0.6640`), and another point
+where behavior and geometry align (`epoch 3: acc 0.6953, label gap +0.3034`).
+Those signals do not survive seeds. Treat them as a debugging target, not a
+result.
+
+Immediate next steps:
+
+- rerun this band with at least 3 seeds before treating it as signal;
+- log validation metrics per epoch and select by validation loss or calibrated
+  accuracy, not final training epoch;
+- add calibration metrics because current improvements are overconfident;
+- sweep `alias_pool_size`, `n_nodes`, `query_steps`, and training graph count;
+- compare against explicit relation-aware attention and graph-feature baselines.

@@ -314,9 +314,9 @@ class ResonanceEmbedding(nn.Module):
         # Only applies to learned phase embeddings with explicit weight/angle params
         from .phase_embeddings import RealPhaseEmbedding, ComplexAnglePhaseEmbedding
         if isinstance(self.phase, RealPhaseEmbedding):
-            nn.init.normal_(self.phase.weight, std=self.config.phase_init_std)
+            nn.init.normal_(self.phase.weight, std=self._effective_phase_init_std)
         elif isinstance(self.phase, ComplexAnglePhaseEmbedding):
-            nn.init.normal_(self.phase.angle, std=self.config.phase_init_std)
+            nn.init.normal_(self.phase.angle, std=self._effective_phase_init_std)
         # FourierFixed and Hierarchical handle their own init
 
     def _init_phonetic_phases(self, rhyme_index: dict[str, Any]) -> None:
