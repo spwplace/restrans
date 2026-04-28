@@ -1,9 +1,22 @@
 import { Link, useLocation } from "react-router";
-import { Home, FlaskConical, Github } from "lucide-react";
+import {
+  Database,
+  FlaskConical,
+  Github,
+  Home,
+  Layers3,
+  Microscope,
+  Terminal,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const navItems = [
   { path: "/", label: "Home", icon: Home },
+  { path: "/architecture", label: "Architecture", icon: Layers3 },
+  { path: "/experiments", label: "Experiments", icon: FlaskConical },
+  { path: "/tasks", label: "Tasks", icon: Database },
+  { path: "/interpretability", label: "Interp", icon: Microscope },
+  { path: "/reproducibility", label: "Repro", icon: Terminal },
 ];
 
 export default function Layout({ children }: { children: React.ReactNode }) {
@@ -11,13 +24,13 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-screen bg-background text-foreground flex flex-col">
-      <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="container mx-auto px-4 h-14 flex items-center justify-between">
-          <Link to="/" className="flex items-center gap-2 font-semibold text-lg hover:opacity-80 transition-opacity">
-            <FlaskConical className="h-5 w-5 text-primary" />
-            <span>Resonance Transformers</span>
+      <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/75">
+        <div className="layout-header">
+          <Link to="/" className="brand-link">
+            <FlaskConical aria-hidden="true" className="h-5 w-5 text-primary" />
+            <span>Resonance Research</span>
           </Link>
-          <nav className="flex items-center gap-1">
+          <nav className="nav-scroll" aria-label="Primary navigation">
             {navItems.map((item) => {
               const Icon = item.icon;
               const active = location.pathname === item.path;
@@ -26,13 +39,13 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                   key={item.path}
                   to={item.path}
                   className={cn(
-                    "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors",
+                    "nav-link",
                     active
-                      ? "bg-primary text-primary-foreground"
+                      ? "nav-link-active"
                       : "text-muted-foreground hover:text-foreground hover:bg-accent"
                   )}
                 >
-                  <Icon className="h-4 w-4" />
+                  <Icon aria-hidden="true" className="h-4 w-4" />
                   {item.label}
                 </Link>
               );
@@ -41,9 +54,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               href="https://github.com/spwplace/restrans"
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+              className="nav-link text-muted-foreground hover:text-foreground hover:bg-accent"
             >
-              <Github className="h-4 w-4" />
+              <Github aria-hidden="true" className="h-4 w-4" />
               GitHub
             </a>
           </nav>
@@ -55,13 +68,13 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       </main>
 
       <footer className="border-t py-8 mt-12">
-        <div className="container mx-auto px-4 text-center text-sm text-muted-foreground">
+        <div className="container mx-auto px-4 text-sm text-muted-foreground footer-grid">
           <p className="mb-2">
-            A self-directed study project ·{" "}
+            Resonance Transformer research dossier ·{" "}
             <a href="https://github.com/spwplace/restrans" className="underline hover:text-foreground">GitHub</a>
           </p>
           <p>
-            Modular dual-stream transformer architectures implemented from scratch in PyTorch
+            Built to summarize current evidence, failure modes, open questions, and reproduction paths.
           </p>
         </div>
       </footer>

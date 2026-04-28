@@ -6,7 +6,14 @@ import { build } from "vite";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(__dirname, "..");
 
-const routes = ["/"];
+const routes = [
+  "/",
+  "/architecture",
+  "/experiments",
+  "/tasks",
+  "/interpretability",
+  "/reproducibility",
+];
 
 async function prerender() {
   // 1. Build client bundle

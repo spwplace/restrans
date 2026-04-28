@@ -67,12 +67,14 @@ def free_vars(term: Term) -> set[str]:
     return set().union(*(free_vars(arg) for arg in term.args)) if term.args else set()
 
 
-def apply_subst(term: Term, subst: Subst) -> Term:
+def apply_subst(term: Term, subst: Subst, seen: frozenset[str] = frozenset()) -> Term:
     if isinstance(term, Var):
         if term.name in subst:
-            return apply_subst(subst[term.name], subst)
+            if term.name in seen:
+                return term
+            return apply_subst(subst[term.name], subst, seen | {term.name})
         return term
-    return Fun(term.name, tuple(apply_subst(arg, subst) for arg in term.args))
+    return Fun(term.name, tuple(apply_subst(arg, subst, seen) for arg in term.args))
 
 
 def occurs(name: str, term: Term, subst: Subst) -> bool:
@@ -133,7 +135,10 @@ def random_substitution(rng: random.Random, variables: set[str], depth: int) -> 
     subst: Subst = {}
     for name in sorted(variables):
         if rng.random() < 0.65:
-            subst[name] = random_term(rng, depth=max(0, depth - 1), var_prob=0.15)
+            replacement = random_term(rng, depth=max(0, depth - 1), var_prob=0.15)
+            if occurs(name, replacement, subst):
+                replacement = Fun(rng.choice(CONSTANTS))
+            subst[name] = replacement
     return subst
 
 

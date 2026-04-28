@@ -64,6 +64,10 @@ data/source_archives 183M
   - `data/processed/probes`
   - HANS, MSGS, SLOG, COGS, CFQ, POJ-104, BigCloneBench, and CodeSearchNet
     converted to yes/no JSONL probes.
+- External research-code references:
+  - cap-matching reference implementation: `external/reu_unif`
+  - fetched by `scripts/setup_external_deps.sh`
+  - pinned revision and source URL are documented in `external-deps.md`.
 
 ## Staging Knobs
 
@@ -89,3 +93,6 @@ The most promising near-term real tasks are:
   wired into training.
 - HANS / MSGS / SLOG / COGS / CFQ / POJ-104 / BigCloneBench as second-wave
   generic probes after the first executable wave identifies promising regimes.
+- Cap matching / algebraic protocol probes as self-contained synthetic formal
+  regimes that explicitly reward knowledge-based unification and constructor
+  closure reasoning.

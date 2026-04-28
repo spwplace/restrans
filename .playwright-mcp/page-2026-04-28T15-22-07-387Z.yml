@@ -1,0 +1,145 @@
+- generic [ref=e3]:
+  - banner [ref=e4]:
+    - generic [ref=e5]:
+      - link "Resonance Research" [ref=e6] [cursor=pointer]:
+        - /url: /
+        - img [ref=e7]
+        - generic [ref=e9]: Resonance Research
+      - navigation "Primary navigation" [ref=e10]:
+        - link "Home" [ref=e11] [cursor=pointer]:
+          - /url: /
+          - img [ref=e12]
+          - text: Home
+        - link "Architecture" [ref=e15] [cursor=pointer]:
+          - /url: /architecture
+          - img [ref=e16]
+          - text: Architecture
+        - link "Experiments" [ref=e20] [cursor=pointer]:
+          - /url: /experiments
+          - img [ref=e21]
+          - text: Experiments
+        - link "Tasks" [ref=e23] [cursor=pointer]:
+          - /url: /tasks
+          - img [ref=e24]
+          - text: Tasks
+        - link "Interp" [ref=e28] [cursor=pointer]:
+          - /url: /interpretability
+          - img [ref=e29]
+          - text: Interp
+        - link "Repro" [ref=e33] [cursor=pointer]:
+          - /url: /reproducibility
+          - img [ref=e34]
+          - text: Repro
+        - link "GitHub" [ref=e36] [cursor=pointer]:
+          - /url: https://github.com/spwplace/restrans
+          - img [ref=e37]
+          - text: GitHub
+  - main [ref=e40]:
+    - generic [ref=e41]:
+      - generic [ref=e43]:
+        - generic [ref=e44]:
+          - paragraph [ref=e45]: Research dossier · updated April 28, 2026
+          - heading "Resonance Transformers as a structural-prior research program" [level=1] [ref=e46]
+          - paragraph [ref=e47]: "This project studies whether a dedicated phase-like stream can help transformer models represent topology-bearing structure: binding, graph relations, proof state, unification constraints, protocol traces, and controlled natural-language syntax."
+          - paragraph [ref=e48]: The current evidence is promising but narrow. The strongest early signal is on a low-data BLiMP wh-island regime, and it points more toward the usefulness of a separate phase/structural stream than toward the original additive attention-bias mechanism. The project is now organized around falsifiable ablations, better tasks, and interpretability tools that can say what the phase stream actually encodes.
+          - generic [ref=e49]:
+            - link "Current evidence" [ref=e50] [cursor=pointer]:
+              - /url: /experiments
+              - text: Current evidence
+              - img [ref=e51]
+            - link "Repository" [ref=e53] [cursor=pointer]:
+              - /url: https://github.com/spwplace/restrans
+              - img [ref=e54]
+              - text: Repository
+              - img [ref=e57]
+        - generic "Project facts" [ref=e61]:
+          - generic [ref=e62]:
+            - generic [ref=e63]: Current thesis
+            - strong [ref=e64]: phase/structural stream may help topology-bearing sequence tasks
+          - generic [ref=e65]:
+            - generic [ref=e66]: Main caution
+            - strong [ref=e67]: current additive attention bias is not yet established as the key mechanism
+          - generic [ref=e68]:
+            - generic [ref=e69]: Best signal so far
+            - strong [ref=e70]: low-data BLiMP wh-island split, with phase variants ahead of standard
+          - generic [ref=e71]:
+            - generic [ref=e72]: Main blocker
+            - strong [ref=e73]: finding task regimes where structural information is necessary and learnable
+          - generic [ref=e74]:
+            - generic [ref=e75]: Repro style
+            - strong [ref=e76]: uv environment, scripted dataset fetches, pinned external cap-matcher source
+          - generic [ref=e77]:
+            - generic [ref=e78]: Compute targets
+            - strong [ref=e79]: local Apple MPS/CPU plus persvati AMD ROCm/CPU
+      - generic [ref=e80]:
+        - generic [ref=e81]:
+          - paragraph [ref=e82]: What the project is trying to prove
+          - heading "Precise enough to be wrong" [level=2] [ref=e83]
+        - generic [ref=e84]:
+          - article [ref=e85]:
+            - img [ref=e86]
+            - heading "The hypothesis" [level=3] [ref=e91]
+            - paragraph [ref=e92]: "Some sequence tasks contain durable structural invariants: binding, scope, graph topology, proof state, dependency paths, aliasing, or semantic role structure. A model with a dedicated phase-like stream may learn a compact coordinate system for those invariants instead of forcing every property through the same residual representation."
+          - article [ref=e93]:
+            - img [ref=e94]
+            - heading "The narrowed claim" [level=3] [ref=e98]
+            - paragraph [ref=e99]: "The current evidence does not justify claims about general language modeling superiority. The live claim is narrower: phase-stream architectures are plausible structural priors, and the right evaluation is a battery of tasks where structure is required, surface cues are controlled, and ablations distinguish stream capacity from attention-bias effects."
+          - article [ref=e100]:
+            - img [ref=e101]
+            - heading "The research standard" [level=3] [ref=e105]
+            - paragraph [ref=e106]: A result counts only if it survives iso-parameter baselines, phase-only and bias-only ablations, multiple seeds, hard negatives, and representation probes. Microvalidations are indicators; the target is a respectable literature task plus controlled synthetic tasks that reveal why a mechanism helps.
+      - generic [ref=e107]:
+        - generic [ref=e108]:
+          - paragraph [ref=e109]: Read this first
+          - heading "How to navigate the dossier" [level=2] [ref=e110]
+        - generic [ref=e111]:
+          - link "Architecture The model family, why the original attention-bias path is under suspicion, and the concrete variants now implemented." [ref=e112] [cursor=pointer]:
+            - /url: /architecture
+            - img [ref=e113]
+            - generic [ref=e117]: Architecture
+            - paragraph [ref=e118]: The model family, why the original attention-bias path is under suspicion, and the concrete variants now implemented.
+          - link "Experiments Current evidence table, how to read positive/null/mixed results, and why the strongest current claim is narrow." [ref=e119] [cursor=pointer]:
+            - /url: /experiments
+            - img [ref=e120]
+            - generic [ref=e122]: Experiments
+            - paragraph [ref=e123]: Current evidence table, how to read positive/null/mixed results, and why the strongest current claim is narrow.
+          - link "Tasks Synthetic generators, literature datasets, and the regime-probe criteria for a meaningful structural task." [ref=e124] [cursor=pointer]:
+            - /url: /tasks
+            - img [ref=e125]
+            - generic [ref=e129]: Tasks
+            - paragraph [ref=e130]: Synthetic generators, literature datasets, and the regime-probe criteria for a meaningful structural task.
+          - link "Interpretability Stream ablations, activation patching, SAEs, representation geometry, and intrinsic interpretability hooks." [ref=e131] [cursor=pointer]:
+            - /url: /interpretability
+            - img [ref=e132]
+            - generic [ref=e136]: Interpretability
+            - paragraph [ref=e137]: Stream ablations, activation patching, SAEs, representation geometry, and intrinsic interpretability hooks.
+          - link "Reproducibility Commands, scripts, external dependency pinning, output locations, and the current overnight-run workflow." [ref=e138] [cursor=pointer]:
+            - /url: /reproducibility
+            - img [ref=e139]
+            - generic [ref=e141]: Reproducibility
+            - paragraph [ref=e142]: Commands, scripts, external dependency pinning, output locations, and the current overnight-run workflow.
+      - generic [ref=e144]:
+        - generic [ref=e145]:
+          - paragraph [ref=e146]: Boundaries
+          - heading "What is not being claimed" [level=2] [ref=e147]
+          - paragraph [ref=e148]: "Earlier NotebookLM/Kimi-generated material used speculative language about holography, superradiance, and biological quantum computation. That material is not evidence for this ML project. The usable idea is much more ordinary: a structural coordinate stream may be a useful inductive bias, and we can test that with normal ablations, controlled datasets, and mechanistic analysis."
+        - generic [ref=e149]:
+          - generic [ref=e150]:
+            - img [ref=e151]
+            - generic [ref=e154]: Relation-aware self-attention and structural attention encodings are the closest architectural neighborhood.
+          - generic [ref=e155]:
+            - img [ref=e156]
+            - generic [ref=e159]: Semantic-preserving program contrast is prior art; this project should not frame it as novel.
+          - generic [ref=e160]:
+            - img [ref=e161]
+            - generic [ref=e164]: The possible contribution is the specific phase/structural-stream factorization, task suite, and causal analysis of whether it helps.
+          - generic [ref=e165]:
+            - img [ref=e166]
+            - generic [ref=e169]: Quantum and microtubule metaphors are not evidence. They may inspire vocabulary, but the empirical work must stand on ordinary ML terms.
+  - contentinfo [ref=e170]:
+    - generic [ref=e171]:
+      - paragraph [ref=e172]:
+        - text: Resonance Transformer research dossier ·
+        - link "GitHub" [ref=e173] [cursor=pointer]:
+          - /url: https://github.com/spwplace/restrans
+      - paragraph [ref=e174]: Built to summarize current evidence, failure modes, open questions, and reproduction paths.

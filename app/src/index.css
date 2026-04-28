@@ -71,5 +71,300 @@
   }
   body {
     @apply bg-background text-foreground;
+    font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    line-height: 1.5;
+  }
+}
+
+@layer components {
+  .layout-header {
+    @apply mx-auto flex min-h-14 w-full max-w-7xl items-center justify-between gap-3 px-4 py-2;
+  }
+
+  .brand-link {
+    @apply flex shrink-0 items-center gap-2 text-sm font-semibold transition-opacity hover:opacity-80 sm:text-base;
+  }
+
+  .nav-scroll {
+    @apply flex min-w-0 items-center gap-1 overflow-x-auto pb-1;
+    scrollbar-width: thin;
+  }
+
+  .nav-link {
+    @apply flex shrink-0 items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm font-medium transition-colors;
+  }
+
+  .nav-link-active {
+    @apply bg-foreground text-background;
+  }
+
+  .footer-grid {
+    @apply grid max-w-7xl gap-1 md:grid-cols-[1fr_auto];
+  }
+
+  .site-shell {
+    @apply mx-auto w-full max-w-7xl;
+  }
+
+  .intro-band {
+    @apply border-b bg-muted/40 px-4 py-10 sm:py-14;
+  }
+
+  .content-grid {
+    @apply grid gap-8 lg:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.65fr)] lg:items-start;
+  }
+
+  .intro-copy {
+    @apply max-w-4xl;
+  }
+
+  .intro-copy h1,
+  .page-hero h1 {
+    @apply max-w-5xl text-3xl font-semibold leading-tight sm:text-4xl lg:text-5xl;
+    letter-spacing: 0;
+  }
+
+  .intro-copy p,
+  .page-hero p,
+  .split-layout p,
+  .info-card p,
+  .page-tile p,
+  .note-panel p,
+  .artifact-row p {
+    @apply text-muted-foreground;
+  }
+
+  .lead {
+    @apply mt-4 max-w-4xl text-lg leading-8 text-foreground;
+  }
+
+  .eyebrow {
+    @apply mb-3 text-xs font-semibold uppercase tracking-[0.14em] text-teal-700;
+  }
+
+  .button-row {
+    @apply mt-6 flex flex-wrap items-center gap-3;
+  }
+
+  .action-button {
+    @apply inline-flex h-10 items-center gap-2 rounded-md bg-foreground px-4 text-sm font-semibold text-background transition-opacity hover:opacity-90;
+  }
+
+  .quiet-button {
+    @apply inline-flex h-10 items-center gap-2 rounded-md border px-4 text-sm font-semibold text-foreground transition-colors hover:bg-accent;
+  }
+
+  .fact-panel {
+    @apply rounded-lg border bg-background p-4 shadow-sm;
+  }
+
+  .fact-row {
+    @apply grid gap-1 border-b py-3 last:border-0;
+  }
+
+  .fact-row span {
+    @apply text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground;
+  }
+
+  .fact-row strong {
+    @apply text-sm font-semibold leading-6 text-foreground;
+  }
+
+  .section-band {
+    @apply px-4 py-10 sm:py-12;
+  }
+
+  .muted-band {
+    @apply border-y bg-muted/40;
+  }
+
+  .page-hero {
+    @apply pb-8;
+  }
+
+  .section-heading {
+    @apply mb-6 max-w-4xl;
+  }
+
+  .section-heading h2,
+  .split-layout h2 {
+    @apply text-2xl font-semibold leading-tight sm:text-3xl;
+    letter-spacing: 0;
+  }
+
+  .three-column {
+    @apply grid gap-4 md:grid-cols-3;
+  }
+
+  .two-column {
+    @apply grid gap-4 md:grid-cols-2;
+  }
+
+  .page-grid {
+    @apply grid gap-4 sm:grid-cols-2 lg:grid-cols-5;
+  }
+
+  .info-card,
+  .page-tile,
+  .note-panel {
+    @apply rounded-lg border bg-background p-5 shadow-sm;
+  }
+
+  .info-card svg,
+  .page-tile svg {
+    @apply mb-4 text-teal-700;
+  }
+
+  .info-card h3,
+  .page-tile span,
+  .note-panel h3 {
+    @apply mb-2 block text-base font-semibold text-foreground;
+  }
+
+  .page-tile {
+    @apply transition-colors hover:border-foreground/30 hover:bg-background;
+  }
+
+  .split-layout {
+    @apply grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(320px,0.75fr)] lg:items-start;
+  }
+
+  .check-list {
+    @apply grid gap-3;
+  }
+
+  .check-row {
+    @apply flex gap-3 rounded-lg border bg-background p-4 text-sm leading-6;
+  }
+
+  .check-row svg {
+    @apply mt-0.5 shrink-0 text-emerald-700;
+  }
+
+  .step-list {
+    @apply grid gap-3;
+  }
+
+  .step-row {
+    @apply grid gap-2 rounded-lg border bg-background p-4 md:grid-cols-[180px_1fr];
+  }
+
+  .step-row strong {
+    @apply text-sm text-foreground;
+  }
+
+  .step-row p {
+    @apply text-sm leading-6 text-muted-foreground;
+  }
+
+  .code-block,
+  .command-row pre {
+    @apply overflow-x-auto rounded-lg border bg-zinc-950 p-4 text-sm text-zinc-50;
+  }
+
+  .code-block pre,
+  .command-row pre {
+    @apply whitespace-pre-wrap break-words font-mono;
+  }
+
+  .table-wrap {
+    @apply overflow-x-auto rounded-lg border bg-background;
+  }
+
+  .research-table {
+    @apply w-full min-w-[820px] border-collapse text-left text-sm;
+  }
+
+  .research-table th {
+    @apply border-b bg-muted/60 px-4 py-3 align-top font-semibold text-foreground;
+  }
+
+  .research-table td {
+    @apply border-b px-4 py-3 align-top text-muted-foreground;
+  }
+
+  .research-table tr:last-child td {
+    @apply border-b-0;
+  }
+
+  .research-table code,
+  .compact-list code,
+  .artifact-row code,
+  .split-layout code {
+    @apply rounded bg-muted px-1.5 py-0.5 font-mono text-[0.85em] text-foreground;
+  }
+
+  .status-pill {
+    @apply inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold;
+  }
+
+  .status-pill.strong-signal {
+    @apply border-emerald-300 bg-emerald-50 text-emerald-800;
+  }
+
+  .status-pill.mixed {
+    @apply border-amber-300 bg-amber-50 text-amber-800;
+  }
+
+  .status-pill.negative {
+    @apply border-rose-300 bg-rose-50 text-rose-800;
+  }
+
+  .status-pill.early,
+  .status-pill.running {
+    @apply border-sky-300 bg-sky-50 text-sky-800;
+  }
+
+  .bar-list {
+    @apply grid gap-5;
+  }
+
+  .bar-row {
+    @apply rounded-lg border bg-background p-4;
+  }
+
+  .bar-label {
+    @apply mb-3 flex flex-wrap items-center justify-between gap-2 text-sm;
+  }
+
+  .bar-label span {
+    @apply text-muted-foreground;
+  }
+
+  .bar-track {
+    @apply grid gap-2;
+  }
+
+  .bar {
+    @apply min-h-8 rounded-md px-3 py-1.5 text-right text-xs font-semibold leading-5 text-white;
+    min-width: 3rem;
+  }
+
+  .standard-bar {
+    @apply bg-zinc-600;
+  }
+
+  .resonance-bar {
+    @apply bg-teal-700;
+  }
+
+  .compact-list {
+    @apply grid gap-2 text-sm leading-6 text-muted-foreground;
+  }
+
+  .command-list {
+    @apply grid gap-4;
+  }
+
+  .command-row {
+    @apply grid gap-2 rounded-lg border bg-background p-4;
+  }
+
+  .artifact-grid {
+    @apply grid gap-3 md:grid-cols-2;
+  }
+
+  .artifact-row {
+    @apply rounded-lg border bg-background p-4;
   }
 }

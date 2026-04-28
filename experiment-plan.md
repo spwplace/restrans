@@ -423,6 +423,10 @@ Prepared probe outputs:
   - `data/processed/probes/poj104`
   - `data/processed/probes/bigclonebench`
   - `data/processed/probes/codesearchnet`
+- Self-contained algebraic synthetic probes:
+  - `structural_task_probe.py --task unification`
+  - `structural_task_probe.py --task cap_matching`
+  - `structural_task_probe.py --task algebraic_protocol`
 
 Second-wave command:
 
@@ -453,6 +457,21 @@ Second-wave hypotheses:
   pressure.
 - POJ-104: tests program-to-problem structural classification.
 - BigCloneBench: tests program semantic-clone recognition.
+- Cap matching: tests knowledge-based unification against Cap-terms representing
+  infinite constructor closure, inspired by the REU cap-matching work.
+- Algebraic protocol reachability: tests Dolev-Yao-style message derivability
+  with pairing, encryption, splitting, and key-gated decryption.
+
+Reproducibility note for cap matching:
+
+```bash
+bash scripts/setup_external_deps.sh
+```
+
+This fetches the original reference implementation into `external/reu_unif` at
+the pinned revision documented in `external-deps.md`. The training probes are
+self-contained Python implementations of the bounded experimental fragments, so
+they do not depend on a local `~/dev/reu_unif` checkout or old Rust toolchain.
 
 Still not implemented:
 

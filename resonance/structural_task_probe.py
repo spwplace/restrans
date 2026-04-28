@@ -30,7 +30,9 @@ from regime_probe import (  # noqa: E402
 from resonance.device import enable_deterministic  # noqa: E402
 from story_query_eval import TemporalQueryDataset  # noqa: E402
 from synthetic.agreement import AgreementDataset  # noqa: E402
+from synthetic.algebraic_protocol import AlgebraicProtocolDataset  # noqa: E402
 from synthetic.causal_intervention import CausalInterventionDataset  # noqa: E402
+from synthetic.cap_matching import CapMatchingDataset  # noqa: E402
 from synthetic.dyck import DyckDataset  # noqa: E402
 from synthetic.external_syntax import AgreementFileDataset, BlimpMinimalPairDataset, GenericProbeDataset  # noqa: E402
 from synthetic.graph_alias import GraphAliasDataset  # noqa: E402
@@ -48,6 +50,8 @@ TASKS = (
     "template_equivalence",
     "dyck",
     "unification",
+    "cap_matching",
+    "algebraic_protocol",
     "graph_alias",
     "causal_intervention",
     "structural_paraphrase",
@@ -183,6 +187,16 @@ def build_datasets(args: argparse.Namespace):
         return (
             UnificationDataset(n_examples=args.train_examples, seed=args.dataset_seed, depth=args.depth),
             UnificationDataset(n_examples=args.val_examples, seed=args.dataset_seed + 100_000, depth=args.depth),
+        )
+    if args.task == "cap_matching":
+        return (
+            CapMatchingDataset(n_examples=args.train_examples, seed=args.dataset_seed, depth=args.depth),
+            CapMatchingDataset(n_examples=args.val_examples, seed=args.dataset_seed + 100_000, depth=args.depth),
+        )
+    if args.task == "algebraic_protocol":
+        return (
+            AlgebraicProtocolDataset(n_examples=args.train_examples, seed=args.dataset_seed, depth=args.depth),
+            AlgebraicProtocolDataset(n_examples=args.val_examples, seed=args.dataset_seed + 100_000, depth=args.depth),
         )
     if args.task == "graph_alias":
         return build_graph_alias(args)
