@@ -1,0 +1,48 @@
+{
+  "name": "literature_medium_suite",
+  "purpose": "First medium-scale matrix after integrating relation-aware attention, dual-stream, structural-generalization, and interpretability literature.",
+  "conditions": [
+    "standard",
+    "standard_iso",
+    "standard_alibi",
+    "standard_deberta_lite",
+    "phase_stream_only_normalized",
+    "phase_stream_only_normalized_phase_contrastive",
+    "resonance_full_normalized",
+    "phase_dynamic_qk_film",
+    "complex_directional_normalized",
+    "relational_stream_lite"
+  ],
+  "model_scale": {
+    "embed_dim": 160,
+    "layers": 4,
+    "heads": 4,
+    "ff_dim": 640,
+    "target_class": "small-medium local run; scale to 10M-30M after runner validation"
+  },
+  "tasks": [
+    "cap_matching_depth6",
+    "algebraic_protocol_depth4",
+    "unification_depth5",
+    "listops_depth5",
+    "cogs_gen",
+    "slog_gen_cogs_lf",
+    "cfq_mcd1",
+    "equibench_oj_va",
+    "equibench_stoke",
+    "hans_evaluation",
+    "msgs_syntactic_category_relative_position"
+  ],
+  "go_criteria": [
+    "selective gains on controlled structural splits",
+    "phase/residual geometry is cleaner for structural labels",
+    "ablation or patching shows causal structural-stream involvement",
+    "gains survive ALiBi, DeBERTa-lite, iso-param, and relational-stream-lite baselines"
+  ],
+  "stop_or_reframe_criteria": [
+    "only toy canaries improve",
+    "relative-bias or DeBERTa-lite baselines match all gains",
+    "phase-only, inert, and full variants remain indistinguishable",
+    "stream interventions show no causal effect"
+  ]
+}

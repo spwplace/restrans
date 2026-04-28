@@ -35,6 +35,7 @@ dist-ssr/
 # IDE / OS
 .vscode/
 .idea/
+.playwright-mcp/
 .DS_Store
 *.sw?
 

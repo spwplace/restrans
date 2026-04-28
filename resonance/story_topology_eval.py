@@ -266,8 +266,28 @@ def build_model(args: argparse.Namespace, condition: str, tokenizer: StoryTokeni
     if base_condition == "standard":
         config = StandardConfig(name=condition, **common)
         return StandardTransformer(config), config
+    if base_condition == "standard_alibi":
+        config = StandardConfig(name=condition, attention_variant="alibi", **common)
+        return StandardTransformer(config), config
+    if base_condition == "standard_deberta_lite":
+        config = StandardConfig(name=condition, attention_variant="deberta_lite", **common)
+        return StandardTransformer(config), config
     if base_condition == "standard_iso":
         config = StandardConfig(name=condition, **_iso_standard_common(args, common))
+        return StandardTransformer(config), config
+    if base_condition == "standard_iso_alibi":
+        config = StandardConfig(
+            name=condition,
+            attention_variant="alibi",
+            **_iso_standard_common(args, common),
+        )
+        return StandardTransformer(config), config
+    if base_condition == "standard_iso_deberta_lite":
+        config = StandardConfig(
+            name=condition,
+            attention_variant="deberta_lite",
+            **_iso_standard_common(args, common),
+        )
         return StandardTransformer(config), config
 
     variant_options: dict[str, dict[str, Any]] = {
@@ -321,6 +341,14 @@ def build_model(args: argparse.Namespace, condition: str, tokenizer: StoryTokeni
         "structural_heads_1": {
             "use_phase_stream": True,
             "use_resonance_bias": False,
+            "n_structural_heads": 1,
+            "structural_head_scale": 1.0,
+        },
+        "relational_stream_lite": {
+            "use_phase_stream": False,
+            "use_resonance_bias": True,
+            "phase_update_mode": "mlp",
+            "resonance_kernel": "bilinear",
             "n_structural_heads": 1,
             "structural_head_scale": 1.0,
         },

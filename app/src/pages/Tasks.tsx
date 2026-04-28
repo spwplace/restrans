@@ -1,4 +1,4 @@
-import { datasetRows, formalDataIdeas, syntheticTasks } from "@/data/research";
+import { benchmarkTiers, datasetRows, formalDataIdeas, syntheticTasks } from "@/data/research";
 
 export default function Tasks() {
   return (
@@ -45,6 +45,35 @@ export default function Tasks() {
       </section>
 
       <section className="section-band">
+        <div className="section-heading">
+          <p className="eyebrow">Benchmark suite</p>
+          <h2>Do not leave any research direction on the floor</h2>
+        </div>
+        <div className="table-wrap">
+          <table className="research-table">
+            <thead>
+              <tr>
+                <th>Tier</th>
+                <th>Purpose</th>
+                <th>Tasks</th>
+                <th>Decision</th>
+              </tr>
+            </thead>
+            <tbody>
+              {benchmarkTiers.map((tier) => (
+                <tr key={tier.tier}>
+                  <td>{tier.tier}</td>
+                  <td>{tier.purpose}</td>
+                  <td>{tier.tasks}</td>
+                  <td>{tier.decision}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section className="section-band muted-band">
         <div className="section-heading">
           <p className="eyebrow">Synthetic generators</p>
           <h2>Controlled tasks we can instrument completely</h2>

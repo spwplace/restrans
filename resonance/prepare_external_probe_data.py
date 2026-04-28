@@ -362,6 +362,64 @@ def convert_codesearchnet(args: argparse.Namespace) -> dict[str, int]:
     return {"codesearchnet/train": count}
 
 
+def convert_equibench(args: argparse.Namespace) -> dict[str, int]:
+    root = args.data_dir / "hf_datasets/equibench"
+    if not root.exists():
+        return {}
+    out = args.output_dir / "equibench"
+    pair_out = args.data_dir / "processed/contrastive/equibench"
+    counts = {}
+    for config_dir in sorted(root.glob("*")):
+        if not config_dir.is_dir():
+            continue
+        ds = load_from_disk(str(config_dir))
+        for split in ds.keys():
+            part = ds[split]
+
+            def rows(part=part, config=config_dir.name, split=split) -> Iterable[dict[str, Any]]:
+                for idx in range(len(part)):
+                    row = part[idx]
+                    yield {
+                        "prefix": (
+                            f"Program one: {clean_text(row['program_1_code'], args.max_code_chars)} "
+                            f"Program two: {clean_text(row['program_2_code'], args.max_code_chars)} "
+                            "Are these programs semantically equivalent? Answer"
+                        ),
+                        "answer": yes_no(row["truth_label"]),
+                        "id": str(row.get("pair_id", idx)),
+                        "source": f"equibench/{config}/{split}",
+                        "metadata": {
+                            "category": row.get("category", config),
+                            "problem_id": row.get("problem_id"),
+                            "program_1_path": row.get("program_1_path"),
+                            "program_2_path": row.get("program_2_path"),
+                            "truth_label": bool(row["truth_label"]),
+                        },
+                    }
+
+            def pair_rows(part=part, config=config_dir.name, split=split) -> Iterable[dict[str, Any]]:
+                for idx in range(len(part)):
+                    row = part[idx]
+                    yield {
+                        "text_a": clean_text(row["program_1_code"], args.max_code_chars),
+                        "text_b": clean_text(row["program_2_code"], args.max_code_chars),
+                        "label": 1 if bool(row["truth_label"]) else 0,
+                        "id": str(row.get("pair_id", idx)),
+                        "source": f"equibench/{config}/{split}",
+                        "metadata": {
+                            "category": row.get("category", config),
+                            "problem_id": row.get("problem_id"),
+                            "program_1_path": row.get("program_1_path"),
+                            "program_2_path": row.get("program_2_path"),
+                        },
+                    }
+
+            key = f"equibench/{config_dir.name}/{split}"
+            counts[key] = write_jsonl(out / config_dir.name / f"{split}.jsonl", rows(), args.limit)
+            write_jsonl(pair_out / config_dir.name / f"{split}.jsonl", pair_rows(), args.limit)
+    return counts
+
+
 CONVERTERS = {
     "hans": convert_hans,
     "msgs": convert_msgs,
@@ -371,6 +429,7 @@ CONVERTERS = {
     "poj104": convert_poj104,
     "bigclonebench": convert_bigclonebench,
     "codesearchnet": convert_codesearchnet,
+    "equibench": convert_equibench,
 }
 
 
@@ -399,6 +458,14 @@ def main() -> None:
         manifest.update(counts)
     args.output_dir.mkdir(parents=True, exist_ok=True)
     manifest_path = args.output_dir / "manifest.json"
+    if manifest_path.exists():
+        try:
+            existing = json.loads(manifest_path.read_text())
+        except json.JSONDecodeError:
+            existing = {}
+        if isinstance(existing, dict):
+            existing.update(manifest)
+            manifest = existing
     manifest_path.write_text(json.dumps(manifest, indent=2, ensure_ascii=False))
     print(f"Wrote {manifest_path}", flush=True)
 

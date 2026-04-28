@@ -36,6 +36,7 @@ from synthetic.cap_matching import CapMatchingDataset  # noqa: E402
 from synthetic.dyck import DyckDataset  # noqa: E402
 from synthetic.external_syntax import AgreementFileDataset, BlimpMinimalPairDataset, GenericProbeDataset  # noqa: E402
 from synthetic.graph_alias import GraphAliasDataset  # noqa: E402
+from synthetic.listops import ListOpsDataset  # noqa: E402
 from synthetic.semantic_story import StoryTokenizer  # noqa: E402
 from synthetic.structural_paraphrase import StructuralParaphraseDataset  # noqa: E402
 from synthetic.template_equivalence import TemplateEquivalenceDataset  # noqa: E402
@@ -49,6 +50,7 @@ TASKS = (
     "generic_probe",
     "template_equivalence",
     "dyck",
+    "listops",
     "unification",
     "cap_matching",
     "algebraic_protocol",
@@ -87,7 +89,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--resonance_blend", type=float, default=0.3)
     parser.add_argument("--dataset_seed", type=int, default=9000)
     parser.add_argument("--dispersion_lambda", type=float, default=0.0)
+    parser.add_argument("--phase_contrastive_weight", type=float, default=0.0)
+    parser.add_argument("--phase_contrastive_temperature", type=float, default=0.2)
     parser.add_argument("--eval_each_epoch", action="store_true")
+    parser.add_argument("--save_models", action="store_true", help="Save trained model checkpoints for interpretability audits.")
 
     # Shared task shape controls.
     parser.add_argument("--max_attractors", type=int, default=4)
@@ -182,6 +187,12 @@ def build_datasets(args: argparse.Namespace):
         return (
             DyckDataset(n_examples=args.train_examples, seed=args.dataset_seed, **common),
             DyckDataset(n_examples=args.val_examples, seed=args.dataset_seed + 100_000, **common),
+        )
+    if args.task == "listops":
+        common = {"depth": args.depth, "max_args": max(2, args.n_types)}
+        return (
+            ListOpsDataset(n_examples=args.train_examples, seed=args.dataset_seed, **common),
+            ListOpsDataset(n_examples=args.val_examples, seed=args.dataset_seed + 100_000, **common),
         )
     if args.task == "unification":
         return (

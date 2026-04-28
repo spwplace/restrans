@@ -21,6 +21,12 @@ class StandardConfig:
     batch_size: int = 8
     gradient_accumulation: int = 4
     learning_rate: float = 3e-4
+    # Baseline attention variants used for literature-grounded comparisons.
+    # ``standard`` is the original learned absolute-position baseline.
+    # ``alibi`` adds a causal distance prior to attention logits.
+    # ``deberta_lite`` adds relative content-position and position-content
+    # terms as a compact DeBERTa-style disentangled attention comparator.
+    attention_variant: str = "standard"  # standard | alibi | deberta_lite
 
 
 @dataclass

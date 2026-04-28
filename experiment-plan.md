@@ -2,6 +2,16 @@
 
 Date: 2026-04-27
 
+Literature integration update, 2026-04-28:
+
+- Treat the scalar additive resonance bias as one readout, not the thesis.
+- The central object is now the compact structural stream plus the training
+  pressure that makes it encode useful relational structure.
+- Baselines must include relative/ALiBi-style bias, DeBERTa-style split, and a
+  lightweight Abstractor/Dual-Attention-style relational-stream comparator
+  before architecture claims are made.
+- See `research/literature_integration.md` for the current execution policy.
+
 ## Purpose
 
 We are not trying to prove that resonance improves arbitrary language modeling.

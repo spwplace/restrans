@@ -1,4 +1,4 @@
-import { architectureSteps, architectureVariants } from "@/data/research";
+import { architectureSteps, architectureVariants, requiredBaselines } from "@/data/research";
 
 export default function Architecture() {
   return (
@@ -66,6 +66,33 @@ hidden = transformer_blocks(blend(semantic, project(phase)))`}</pre>
       </section>
 
       <section className="section-band muted-band">
+        <div className="section-heading">
+          <p className="eyebrow">Baseline discipline</p>
+          <h2>Comparators required by the literature review</h2>
+        </div>
+        <div className="table-wrap">
+          <table className="research-table">
+            <thead>
+              <tr>
+                <th>Baseline</th>
+                <th>Why it is required</th>
+                <th>Repo status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {requiredBaselines.map((baseline) => (
+                <tr key={baseline.name}>
+                  <td>{baseline.name}</td>
+                  <td>{baseline.whyRequired}</td>
+                  <td>{baseline.repoStatus}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section className="section-band">
         <div className="split-layout">
           <div>
             <p className="eyebrow">Design correction</p>

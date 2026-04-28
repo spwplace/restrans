@@ -54,11 +54,31 @@ export type VariantRow = {
   whatItTests: string;
 };
 
+export type PriorArtRow = {
+  family: string;
+  representativeWork: string;
+  lesson: string;
+  integration: string;
+};
+
+export type BenchmarkTierRow = {
+  tier: string;
+  purpose: string;
+  tasks: string;
+  decision: string;
+};
+
+export type BaselineRow = {
+  name: string;
+  whyRequired: string;
+  repoStatus: string;
+};
+
 export const repoFacts = [
-  { label: "Current thesis", value: "phase/structural stream may help topology-bearing sequence tasks" },
-  { label: "Main caution", value: "current additive attention bias is not yet established as the key mechanism" },
+  { label: "Current thesis", value: "compact structural streams need controlled tasks and causal tests" },
+  { label: "Main caution", value: "relation-aware and dual-stream transformer prior art is substantial" },
   { label: "Best signal so far", value: "low-data BLiMP wh-island split, with phase variants ahead of standard" },
-  { label: "Main blocker", value: "finding task regimes where structural information is necessary and learnable" },
+  { label: "Main blocker", value: "matched baselines and medium-scale structure-first runs" },
   { label: "Repro style", value: "uv environment, scripted dataset fetches, pinned external cap-matcher source" },
   { label: "Compute targets", value: "local Apple MPS/CPU plus persvati AMD ROCm/CPU" },
 ];
@@ -74,13 +94,64 @@ export const thesisCards: IconItem[] = [
     title: "The narrowed claim",
     icon: Scale,
     body:
-      "The current evidence does not justify claims about general language modeling superiority. The live claim is narrower: phase-stream architectures are plausible structural priors, and the right evaluation is a battery of tasks where structure is required, surface cues are controlled, and ablations distinguish stream capacity from attention-bias effects.",
+      "The current evidence does not justify claims about general language modeling superiority or broad architectural novelty. The live claim is narrower: bottlenecked structural streams may be useful when trained against real structural invariants and compared against relation-aware and dual-stream baselines.",
   },
   {
     title: "The research standard",
     icon: SearchCheck,
     body:
-      "A result counts only if it survives iso-parameter baselines, phase-only and bias-only ablations, multiple seeds, hard negatives, and representation probes. Microvalidations are indicators; the target is a respectable literature task plus controlled synthetic tasks that reveal why a mechanism helps.",
+      "A result counts only if it survives iso-parameter, relative-bias, DeBERTa-style, and relational-stream baselines, plus phase-only/bias-only ablations, multiple seeds, hard negatives, and causal representation probes. Microvalidations are instrumentation; medium literature tasks are the main evidence.",
+  },
+];
+
+export const priorArtRows: PriorArtRow[] = [
+  {
+    family: "Relation-aware attention",
+    representativeWork: "Shaw et al., Transformer-XL, ALiBi, RoPE/TAPE-style position priors",
+    lesson:
+      "Pairwise biases and relative addressing are established tools. A scalar relation matrix is not novel by itself.",
+    integration:
+      "Standard ALiBi and relative-bias conditions are mandatory comparators before claiming structural-stream gains.",
+  },
+  {
+    family: "Disentangled streams",
+    representativeWork: "DeBERTa, Abstractor, Dual Attention Transformer",
+    lesson:
+      "Separating object/content information from relation information is already an active architecture family.",
+    integration:
+      "The repo now includes DeBERTa-lite and relational-stream-lite comparators; stronger Abstractor/DAT parity remains on the implementation queue.",
+  },
+  {
+    family: "Graph transformer structure",
+    representativeWork: "Graphormer, SAN, GRPE, GraphGPS",
+    lesson:
+      "Graph-relative distances, spectral/Laplacian coordinates, and structural attention biases are standard for graph inputs.",
+    integration:
+      "When ground-truth graph structure is available, compare phase initialization or learned phase against graph-bias baselines.",
+  },
+  {
+    family: "Program and proof structure",
+    representativeWork: "GraphCodeBERT, ContraCode, S4Eq, EquiBench, LeanDojo/LeanProgress",
+    lesson:
+      "Semantic-preserving transformations and proof-state supervision are the right pressure for structural invariance.",
+    integration:
+      "Cap matching, unification, algebraic protocol closure, code-equivalence probes, and LeanProgress staging are the formal branch.",
+  },
+  {
+    family: "Representation geometry",
+    representativeWork: "nonlinear feature geometry, concept polytopes, manifold/phase geometry, intrinsic dimension work",
+    lesson:
+      "Useful features need not be sparse scalar axes; they can be circular, polytope-like, dense, or manifold-valued.",
+    integration:
+      "Interpretability now includes rank, eigenspectrum, CKA, sparse probes, archetype/convex probes, and causal patching.",
+  },
+  {
+    family: "Intrinsic interpretability",
+    representativeWork: "Sparse CLIP, concept bottlenecks, gated SAEs, ReFT, transcoders",
+    lesson:
+      "Interpretability can be trained in, but must be checked against performance and causal faithfulness.",
+    integration:
+      "Phase-contrastive training hooks and sparse/geometry diagnostics are treated as first-class conditions, not post-hoc decoration.",
   },
 ];
 
@@ -114,6 +185,16 @@ export const architectureVariants: VariantRow[] = [
     whatItTests: "Whether the task is learnable without explicit structural machinery.",
   },
   {
+    name: "standard_alibi",
+    mechanism: "Ordinary transformer with an ALiBi causal distance prior.",
+    whatItTests: "Whether gains are just better relative addressing or length/distance bias.",
+  },
+  {
+    name: "standard_deberta_lite",
+    mechanism: "Ordinary transformer with compact disentangled relative content/position attention.",
+    whatItTests: "Whether a known content/position split explains the same signal.",
+  },
+  {
     name: "standard_iso",
     mechanism: "Baseline widened to roughly match the extra resonance parameters.",
     whatItTests: "Whether apparent gains are just capacity or optimization budget.",
@@ -137,6 +218,16 @@ export const architectureVariants: VariantRow[] = [
     name: "resonance_inert_normalized",
     mechanism: "Keeps architecture plumbing while suppressing active signal.",
     whatItTests: "Whether improvements come from implementation side effects.",
+  },
+  {
+    name: "relational_stream_lite",
+    mechanism: "A learned relation stream with a bilinear relation kernel and dedicated structural head, without projected phase as token content.",
+    whatItTests: "Whether a simpler Abstractor/DAT-like relational pathway captures the same benefit.",
+  },
+  {
+    name: "*_phase_contrastive",
+    mechanism: "Condition suffix that adds supervised contrastive pressure to phase states on structural labels.",
+    whatItTests: "Whether the structural stream needs explicit invariance pressure rather than architecture alone.",
   },
   {
     name: "phase_dynamic_mlp / phase_dynamic_attn",
@@ -268,6 +359,14 @@ export const syntheticTasks: TaskRow[] = [
     currentStatus: "Implemented in first-wave sweeps.",
   },
   {
+    name: "ListOps-style tree evaluation",
+    source: "Local operator-tree generator",
+    signalTarget: "Nested expression parsing and modulo operator evaluation",
+    whyItMatters:
+      "It adds a parse-and-compose canary distinct from bracket matching and algebraic unification.",
+    currentStatus: "Implemented in the structural probe runner.",
+  },
+  {
     name: "Causal graph intervention stories",
     source: "Planned extension of semantic-story generator",
     signalTarget: "Counterfactual answer depends on graph topology, not temporal order",
@@ -335,12 +434,106 @@ export const datasetRows: TaskRow[] = [
     currentStatus: "Partly scouted; needs clean runner.",
   },
   {
+    name: "SCAN / ListOps / Dyck",
+    source: "Public formal-language and algorithmic-reasoning tasks",
+    signalTarget: "Stack, parse-tree, and compositional sequence structure",
+    whyItMatters:
+      "Cheap canaries for whether structural instrumentation works; not enough for headline claims.",
+    currentStatus: "Dyck and local ListOps-style probes implemented; public ListOps/SCAN staging remains open.",
+  },
+  {
+    name: "ListOps-style parse evaluation",
+    source: "Local generator following the ListOps operator-tree pattern",
+    signalTarget: "Tree evaluation and nested compositional parsing",
+    whyItMatters:
+      "Complements Dyck: bracket matching is not the same as evaluating a nested operator tree.",
+    currentStatus: "Implemented as a local structural probe; public ListOps staging remains useful later.",
+  },
+  {
+    name: "CFQ",
+    source: "Compositional Freebase Questions / MCD splits",
+    signalTarget: "Compositional semantic parsing under compound divergence",
+    whyItMatters:
+      "A medium-scale literature task where random-split success is not enough.",
+    currentStatus: "Downloaded into the dataset lake and converted to generic probes.",
+  },
+  {
+    name: "EquiBench / CETBench",
+    source: "Recent program-equivalence benchmarks",
+    signalTarget: "Semantic equivalence under controlled program transformations",
+    whyItMatters:
+      "Closest standardized test for whether structural invariance survives surface variation in code.",
+    currentStatus: "Not staged yet; added to the second-wave acquisition list.",
+  },
+  {
+    name: "LeanProgress / LeanDojo",
+    source: "Lean proof-state and proof-progress ecosystems",
+    signalTarget: "Proof-state topology, tactic/progress structure, theorem dependency",
+    whyItMatters:
+      "Best serious formal-reasoning target once infrastructure is ready.",
+    currentStatus: "Not staged yet; prioritized after current syntactic/code probes are stable.",
+  },
+  {
     name: "AMR 3.0",
     source: "LDC2020T02",
     signalTarget: "Sentence-to-graph semantics",
     whyItMatters:
       "The mature real-world graph target. It is the right later-stage test, not the first probe.",
     currentStatus: "Blocked on LDC access.",
+  },
+];
+
+export const benchmarkTiers: BenchmarkTierRow[] = [
+  {
+    tier: "Tier A: canaries",
+    purpose: "Catch broken adapters, saturated tasks, and shortcut-only regimes.",
+    tasks: "Dyck, ListOps/SCAN, Linzen, BLiMP slices, MSGS/HANS, cap matching, unification.",
+    decision: "Do not publish from these alone; use them to decide what is safe to scale.",
+  },
+  {
+    tier: "Tier B: main evidence",
+    purpose: "Run matched 10M-30M comparisons on tasks where structure is necessary.",
+    tasks: "SLOG, COGS/CFQ, EquiBench/CETBench or local formal equivalence, LeanProgress.",
+    decision: "Proceed if gains survive baselines and phase/residual causal tests.",
+  },
+  {
+    tier: "Tier C: transfer",
+    purpose: "Ask whether synthetic or formal structural pressure transfers to language.",
+    tasks: "BabyLM/TinyStories pretraining, then BLiMP, MSGS, HANS, Linzen, SLOG/COGS evals.",
+    decision: "Scale only if structural gains transfer without collapsing ordinary LM behavior.",
+  },
+];
+
+export const requiredBaselines: BaselineRow[] = [
+  {
+    name: "Vanilla transformer",
+    whyRequired: "Establishes the basic learnability and loss trajectory for the task.",
+    repoStatus: "Implemented as standard.",
+  },
+  {
+    name: "Iso-parameter transformer",
+    whyRequired: "Controls for the extra capacity introduced by phase embeddings and adapters.",
+    repoStatus: "Implemented as standard_iso in structural probes.",
+  },
+  {
+    name: "ALiBi / relative bias",
+    whyRequired: "Controls for the possibility that the effect is just a stronger distance/addressing prior.",
+    repoStatus: "Implemented as standard_alibi.",
+  },
+  {
+    name: "DeBERTa-style split",
+    whyRequired: "Controls against existing content/position disentanglement explaining the result.",
+    repoStatus: "Implemented as standard_deberta_lite.",
+  },
+  {
+    name: "Relational-stream comparator",
+    whyRequired: "Controls against Abstractor/DAT-style explicit relation pathways.",
+    repoStatus: "Implemented as relational_stream_lite; stronger parity version still needed.",
+  },
+  {
+    name: "Graph structural bias",
+    whyRequired: "Required whenever the input graph is known and Laplacian/shortest-path structure is available.",
+    repoStatus: "Planned for graph-initialized phase and graph-bias comparisons.",
   },
 ];
 
@@ -395,16 +588,20 @@ export const reproducibilitySteps = [
   {
     title: "Run a structural probe",
     command:
-      "uv run python resonance/structural_task_probe.py --task blimp --conditions standard,standard_iso,resonance_full_normalized,phase_stream_only_normalized --device auto --output_dir resonance/outputs/reviewer_probe",
+      "uv run python resonance/structural_task_probe.py --task dyck --conditions standard,standard_alibi,standard_deberta_lite,phase_stream_only_normalized --device cpu --epochs 1 --train_examples 128 --val_examples 128 --output_dir resonance/outputs/reviewer_probe",
   },
   {
     title: "Run cap matching",
     command:
-      "uv run python resonance/structural_task_probe.py --task cap_matching --n_train 4096 --n_val 1024 --conditions standard,standard_iso,resonance_full_normalized,phase_stream_only_normalized,phase_qk_film --output_dir resonance/outputs/cap_matching_reviewer",
+      "uv run python resonance/structural_task_probe.py --task cap_matching --train_examples 4096 --val_examples 1024 --conditions standard,standard_iso,standard_alibi,standard_deberta_lite,phase_stream_only_normalized_phase_contrastive,relational_stream_lite --output_dir resonance/outputs/cap_matching_reviewer",
+  },
+  {
+    title: "Run literature medium suite",
+    command: "DEVICE=mps bash scripts/run_literature_medium_suite.sh",
   },
   {
     title: "Rebuild the lab notebook",
-    command: "uv run python scripts/build_lab_notebook.py --root resonance/outputs --out resonance/outputs/lab_notebook_hyper_live",
+    command: "uv run python resonance/build_lab_notebook.py --root resonance/outputs --output_dir resonance/outputs/lab_notebook_hyper_live",
   },
   {
     title: "Watch and sync remote runs",
@@ -520,7 +717,7 @@ export const relationAwarePriorArt = [
   "Relation-aware self-attention and structural attention encodings are the closest architectural neighborhood.",
   "Semantic-preserving program contrast is prior art; this project should not frame it as novel.",
   "The possible contribution is the specific phase/structural-stream factorization, task suite, and causal analysis of whether it helps.",
-  "Quantum and microtubule metaphors are not evidence. They may inspire vocabulary, but the empirical work must stand on ordinary ML terms.",
+  "Claims should be stated in ordinary ML terms: baselines, objectives, benchmark splits, interventions, and reproducible measurements.",
 ];
 
 export const formalDataIdeas: IconItem[] = [

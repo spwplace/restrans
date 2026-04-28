@@ -200,7 +200,25 @@ def trace_standard_forward(
         )
         q, k, v = qkv[0], qkv[1], qkv[2]
         qk_logits = torch.matmul(q, k.transpose(-2, -1)) * attn_mod.scale
-        combined_attention = _masked_softmax(qk_logits, mask)
+        combined_logits = qk_logits
+        if getattr(attn_mod, "attention_variant", None) == "alibi":
+            combined_logits = combined_logits + attn_mod._alibi_bias(
+                seq_len,
+                input_ids.device,
+                combined_logits.dtype,
+            )
+        elif hasattr(attn_mod, "rel_pos"):
+            rel_ids = attn_mod._relative_positions(seq_len, input_ids.device)
+            rel = attn_mod.rel_pos(rel_ids).reshape(
+                seq_len,
+                seq_len,
+                attn_mod.n_heads,
+                attn_mod.head_dim,
+            )
+            content_position = torch.einsum("bhid,ijhd->bhij", q, rel)
+            position_content = torch.einsum("ijhd,bhjd->bhij", rel, k)
+            combined_logits = qk_logits + (content_position + position_content) * attn_mod.scale
+        combined_attention = _masked_softmax(combined_logits, mask)
         attn = attn_mod.dropout(combined_attention)
         attn_out = torch.matmul(attn, v).transpose(1, 2).reshape(batch_size, seq_len, -1)
         x = x + attn_mod.out_proj(attn_out)
@@ -210,10 +228,10 @@ def trace_standard_forward(
             AttentionTrace(
                 qk_logits=qk_logits.detach().cpu(),
                 resonance_logits=zeros.detach().cpu(),
-                combined_logits=qk_logits.detach().cpu(),
-                qk_attention=combined_attention.detach().cpu(),
+                combined_logits=combined_logits.detach().cpu(),
+                qk_attention=_masked_softmax(qk_logits, mask).detach().cpu(),
                 combined_attention=combined_attention.detach().cpu(),
-                attention_delta=zeros.detach().cpu(),
+                attention_delta=(combined_attention - _masked_softmax(qk_logits, mask)).detach().cpu(),
                 hidden_pre=hidden_pre.detach().cpu(),
                 hidden_post=x.detach().cpu(),
             )

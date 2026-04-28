@@ -2,6 +2,13 @@
 
 Date: 2026-04-28
 
+Literature integration note: the closest prior art includes relation-aware
+attention, graph transformer structural biases, Abstractor-style relational
+bottlenecks, and Dual Attention Transformer-style sensory/relational splits.
+Therefore, this document should be read as a model-variant workbench, not a
+novelty claim. The active project policy is in
+`research/literature_integration.md`.
+
 This is the handoff document for the next research agent. Read this before
 touching code. The project is **not** currently trying to prove a vague
 "resonance is magic" story. The sharpened question is:

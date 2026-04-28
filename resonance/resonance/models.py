@@ -57,13 +57,48 @@ class StandardAttention(nn.Module):
 
     def __init__(self, config: StandardConfig) -> None:
         super().__init__()
+        self.config = config
         self.n_heads = config.n_heads
         self.head_dim = config.embed_dim // config.n_heads
         self.scale = self.head_dim**-0.5
+        self.attention_variant = config.attention_variant
 
         self.qkv = nn.Linear(config.embed_dim, 3 * config.embed_dim, bias=False)
         self.out_proj = nn.Linear(config.embed_dim, config.embed_dim, bias=False)
         self.dropout = nn.Dropout(config.dropout)
+        if self.attention_variant == "alibi":
+            slopes = self._build_alibi_slopes(config.n_heads)
+            self.register_buffer("alibi_slopes", slopes, persistent=False)
+        elif self.attention_variant == "standard":
+            self.register_buffer("alibi_slopes", torch.empty(0), persistent=False)
+        elif self.attention_variant == "deberta_lite":
+            raise ValueError("StandardAttention does not implement deberta_lite")
+        else:
+            raise ValueError(f"unknown attention_variant: {self.attention_variant}")
+
+    @staticmethod
+    def _build_alibi_slopes(n_heads: int) -> torch.Tensor:
+        """Return ALiBi slopes using the Press et al. construction."""
+
+        def power_of_two_slopes(n: int) -> list[float]:
+            start = 2.0 ** (-(2.0 ** -(math.log2(n) - 3)))
+            ratio = start
+            return [start * ratio**i for i in range(n)]
+
+        if math.log2(n_heads).is_integer():
+            slopes = power_of_two_slopes(n_heads)
+        else:
+            closest = 2 ** math.floor(math.log2(n_heads))
+            slopes = power_of_two_slopes(closest)
+            extra = power_of_two_slopes(2 * closest)[0::2]
+            slopes.extend(extra[: n_heads - closest])
+        return torch.tensor(slopes, dtype=torch.float32)
+
+    def _alibi_bias(self, seq_len: int, device: torch.device, dtype: torch.dtype) -> torch.Tensor:
+        positions = torch.arange(seq_len, device=device)
+        distance = (positions[:, None] - positions[None, :]).clamp(min=0).to(dtype)
+        slopes = self.alibi_slopes.to(device=device, dtype=dtype).view(1, self.n_heads, 1, 1)
+        return -slopes * distance.view(1, 1, seq_len, seq_len)
 
     def forward(
         self,
@@ -91,6 +126,68 @@ class StandardAttention(nn.Module):
 
         attn = torch.matmul(q, k.transpose(-2, -1)) * self.scale
 
+        if self.attention_variant == "alibi":
+            attn = attn + self._alibi_bias(seq_len, x.device, attn.dtype)
+
+        if mask is not None:
+            attn = attn.masked_fill(mask == 0, float("-inf"))
+
+        attn = F.softmax(attn, dim=-1)
+        attn = self.dropout(attn)
+
+        out = torch.matmul(attn, v).transpose(1, 2).reshape(batch_size, seq_len, -1)
+        return self.out_proj(out)
+
+
+class DebertaLiteAttention(nn.Module):
+    """Compact DeBERTa-style disentangled relative attention baseline.
+
+    This is not intended as a faithful reproduction of full DeBERTa. It is a
+    lightweight comparator for the literature question: does a known
+    content/position disentangling trick explain the same gains as the proposed
+    structural stream?
+    """
+
+    def __init__(self, config: StandardConfig) -> None:
+        super().__init__()
+        self.n_heads = config.n_heads
+        self.head_dim = config.embed_dim // config.n_heads
+        self.scale = (3 * self.head_dim) ** -0.5
+        self.max_seq_len = config.max_seq_len
+
+        self.qkv = nn.Linear(config.embed_dim, 3 * config.embed_dim, bias=False)
+        self.rel_pos = nn.Embedding(2 * config.max_seq_len - 1, config.embed_dim)
+        self.out_proj = nn.Linear(config.embed_dim, config.embed_dim, bias=False)
+        self.dropout = nn.Dropout(config.dropout)
+
+    def _relative_positions(self, seq_len: int, device: torch.device) -> torch.Tensor:
+        positions = torch.arange(seq_len, device=device)
+        rel = positions[:, None] - positions[None, :]
+        rel = rel.clamp(min=1 - self.max_seq_len, max=self.max_seq_len - 1)
+        return rel + self.max_seq_len - 1
+
+    def forward(
+        self,
+        x: torch.Tensor,
+        mask: torch.Tensor | None = None,
+    ) -> torch.Tensor:
+        batch_size, seq_len, _ = x.shape
+
+        qkv = (
+            self.qkv(x)
+            .reshape(batch_size, seq_len, 3, self.n_heads, self.head_dim)
+            .permute(2, 0, 3, 1, 4)
+        )
+        q, k, v = qkv[0], qkv[1], qkv[2]
+
+        rel_ids = self._relative_positions(seq_len, x.device)
+        rel = self.rel_pos(rel_ids).reshape(seq_len, seq_len, self.n_heads, self.head_dim)
+
+        content_content = torch.matmul(q, k.transpose(-2, -1))
+        content_position = torch.einsum("bhid,ijhd->bhij", q, rel)
+        position_content = torch.einsum("ijhd,bhjd->bhij", rel, k)
+        attn = (content_content + content_position + position_content) * self.scale
+
         if mask is not None:
             attn = attn.masked_fill(mask == 0, float("-inf"))
 
@@ -110,7 +207,10 @@ class StandardBlock(nn.Module):
     def __init__(self, config: StandardConfig) -> None:
         super().__init__()
         self.ln1 = nn.LayerNorm(config.embed_dim)
-        self.attn = StandardAttention(config)
+        if config.attention_variant == "deberta_lite":
+            self.attn = DebertaLiteAttention(config)
+        else:
+            self.attn = StandardAttention(config)
         self.ln2 = nn.LayerNorm(config.embed_dim)
         self.ff = nn.Sequential(
             nn.Linear(config.embed_dim, config.ff_dim),
@@ -835,6 +935,8 @@ class ResonanceTransformer(nn.Module):
         result: dict[str, Any] = {"logits": logits}
         if return_hidden:
             result["hidden_states"] = hidden
+            result["phase_states"] = phases
+            result["resonance_matrix"] = resonance
         if labels is not None:
             result["loss"] = F.cross_entropy(
                 logits[:, :-1, :].contiguous().view(-1, self.config.vocab_size),

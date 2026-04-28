@@ -1,6 +1,6 @@
 import { Link } from "react-router";
 import { ArrowRight, ExternalLink, Github, ShieldCheck } from "lucide-react";
-import { repoFacts, pageSummaries, relationAwarePriorArt, thesisCards } from "@/data/research";
+import { repoFacts, pageSummaries, priorArtRows, relationAwarePriorArt, thesisCards } from "@/data/research";
 
 export default function Home() {
   return (
@@ -87,14 +87,13 @@ export default function Home() {
       <section className="section-band">
         <div className="split-layout">
           <div>
-            <p className="eyebrow">Boundaries</p>
-            <h2>What is not being claimed</h2>
+            <p className="eyebrow">Prior art first</p>
+            <h2>The research starts inside an occupied design space</h2>
             <p>
-              Earlier NotebookLM/Kimi-generated material used speculative language about
-              holography, superradiance, and biological quantum computation. That material is not
-              evidence for this ML project. The usable idea is much more ordinary: a structural
-              coordinate stream may be a useful inductive bias, and we can test that with normal
-              ablations, controlled datasets, and mechanistic analysis.
+              Relation-aware attention, graph transformers, content/position disentanglement,
+              program contrast, proof-state learning, and intrinsic interpretability already give
+              us the right comparison class. The current project is valuable only if it shows a
+              compact structural stream doing useful, inspectable work beyond those baselines.
             </p>
           </div>
           <div className="check-list">
@@ -105,6 +104,35 @@ export default function Home() {
               </div>
             ))}
           </div>
+        </div>
+      </section>
+
+      <section className="section-band">
+        <div className="section-heading">
+          <p className="eyebrow">Literature integration</p>
+          <h2>What gets folded into the next experiments</h2>
+        </div>
+        <div className="table-wrap">
+          <table className="research-table">
+            <thead>
+              <tr>
+                <th>Family</th>
+                <th>Representative work</th>
+                <th>Lesson</th>
+                <th>Integration</th>
+              </tr>
+            </thead>
+            <tbody>
+              {priorArtRows.map((row) => (
+                <tr key={row.family}>
+                  <td>{row.family}</td>
+                  <td>{row.representativeWork}</td>
+                  <td>{row.lesson}</td>
+                  <td>{row.integration}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </section>
     </div>

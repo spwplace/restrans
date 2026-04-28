@@ -60,10 +60,22 @@ data/source_archives 183M
   - POJ-104: `data/hf_datasets/optional/google__code_x_glue_cc_clone_detection_poj104`
   - CodeSearchNet pair: `data/hf_datasets/optional/sentence-transformers__codesearchnet__pair`
   - BigCloneBench: `data/hf_datasets/optional/google__code_x_glue_cc_clone_detection_big_clone_bench`
+- EquiBench:
+  - `data/hf_datasets/equibench`
+  - generic probes: `data/processed/probes/equibench`
+  - contrastive pairs: `data/processed/contrastive/equibench`
+- Pending second-wave acquisitions:
+  - CETBench dataset/code location still needs confirmation.
+  - LeanProgress / LeanDojo slices for proof-state and proof-progress tasks;
+    use `scripts/setup_leandojo_progress.sh` for an isolated setup.
+  - ListOps / SCAN for cheap parse/compositionality canaries.
+  - OGB / CLRS only if graph/algorithmic generalization becomes a main branch.
 - Generic second-wave probes:
   - `data/processed/probes`
-  - HANS, MSGS, SLOG, COGS, CFQ, POJ-104, BigCloneBench, and CodeSearchNet
-    converted to yes/no JSONL probes.
+  - HANS, MSGS, SLOG, COGS, CFQ, POJ-104, BigCloneBench, CodeSearchNet, and
+    EquiBench converted to yes/no JSONL probes where staged.
+  - EquiBench contrastive pairs are written to
+    `data/processed/contrastive/equibench`.
 - External research-code references:
   - cap-matching reference implementation: `external/reu_unif`
   - fetched by `scripts/setup_external_deps.sh`
@@ -81,6 +93,9 @@ Some command-line numbers are resource controls, not experimental constants:
   optional datasets. It does not truncate the saved Hugging Face dataset.
 - `--babylm_full` snapshots the complete BabyLM repository. Without it, the
   downloader stages strict-small for fast iteration.
+- `--skip_equibench` skips the public EquiBench acquisition.
+- `--include_leandojo` clones LeanDojo-v2 source only; installation/export is
+  intentionally isolated in `scripts/setup_leandojo_progress.sh`.
 
 ## Current Use
 

@@ -428,6 +428,34 @@ def download_hf_named(
     )
 
 
+def download_equibench(args: argparse.Namespace) -> DatasetStatus:
+    configs = ["DCE", "OJ_A", "OJ_V", "OJ_VA", "STOKE", "TVM"]
+    root = args.hf_dir / "equibench"
+    processed = args.processed_dir / "equibench"
+    rows: dict[str, int] = {}
+    for config in configs:
+        ds = load_dataset("anjiangwei/EquiBench-Datasets", config, cache_dir=str(args.cache_dir))
+        out = root / config
+        save_dataset(ds, out)
+        if isinstance(ds, DatasetDict):
+            for split, part in ds.items():
+                rows[f"{config}/{split}"] = len(part)
+                export_jsonl(part, processed / config / f"{split}.jsonl", limit=args.optional_export_limit)
+        else:
+            rows[config] = len(ds)
+            export_jsonl(ds, processed / config / "data.jsonl", limit=args.optional_export_limit)
+    return DatasetStatus(
+        name="anjiangwei/EquiBench-Datasets",
+        status="ok",
+        path=str(root),
+        rows=rows,
+        note=(
+            "Public equivalence-checking benchmark with six configs. JSONL export "
+            "is capped by --optional_export_limit; saved HF datasets are complete."
+        ),
+    )
+
+
 def try_optional_hf(args: argparse.Namespace, repo: str, config: str | None = None) -> DatasetStatus:
     label = f"{repo}/{config}" if config else repo
     ds = load_dataset(repo, config, cache_dir=str(args.cache_dir)) if config else load_dataset(repo, cache_dir=str(args.cache_dir))
@@ -519,6 +547,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--skip_code", action="store_true")
     parser.add_argument("--include_codesearchnet", action="store_true")
     parser.add_argument("--include_big_code", action="store_true")
+    parser.add_argument("--skip_equibench", action="store_true")
+    parser.add_argument("--only_equibench", action="store_true", help="Only stage EquiBench and update the manifest.")
+    parser.add_argument("--include_leandojo", action="store_true", help="Clone LeanDojo-v2 source for proof-progress setup. Installation is handled by scripts/setup_leandojo_progress.sh.")
     return parser.parse_args()
 
 
@@ -541,6 +572,17 @@ def main() -> None:
     manifest_path = args.data_dir / "dataset_manifest.json"
     statuses: list[DatasetStatus] = load_manifest_statuses(manifest_path)
     write_manual_notes(args)
+
+    if args.only_equibench:
+        run_step("equibench", statuses, lambda: download_equibench(args))
+        manifest = {
+            "data_dir": str(args.data_dir),
+            "profile": args.profile,
+            "statuses": [asdict(status) for status in statuses],
+        }
+        manifest_path.write_text(json.dumps(manifest, indent=2, ensure_ascii=False))
+        print(f"\nWrote {manifest_path}")
+        return
 
     if not args.skip_core:
         run_step("wikitext-2-raw-v1", statuses, lambda: download_wikitext(args, "wikitext-2-raw-v1"))
@@ -596,6 +638,8 @@ def main() -> None:
             run_step(f"cfq/{config}", statuses, lambda config=config: download_cfq_config(args, config))
 
     if not args.skip_code:
+        if not args.skip_equibench:
+            run_step("equibench", statuses, lambda: download_equibench(args))
         run_step(
             "code_x_glue_poj104",
             statuses,
@@ -629,6 +673,18 @@ def main() -> None:
                     export_limit=args.optional_export_limit,
                 ),
             )
+
+    if args.include_leandojo and not args.skip_github:
+        run_step(
+            "github:LeanDojo-v2",
+            statuses,
+            lambda: stage_git_repo(
+                args,
+                "LeanDojo-v2",
+                "https://github.com/lean-dojo/LeanDojo-v2.git",
+                "LeanDojo-v2 source repository. Install/export proof-progress data with scripts/setup_leandojo_progress.sh.",
+            ),
+        )
 
     manifest = {
         "data_dir": str(args.data_dir),

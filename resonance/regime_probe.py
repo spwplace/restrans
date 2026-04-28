@@ -116,8 +116,8 @@ def forward_answer_batch(
     *,
     max_length: int,
     device: torch.device,
-) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
-    """Return answer loss, answer logits, targets, and hidden states at answer positions."""
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor | None]:
+    """Return answer loss, logits, targets, hidden states, and optional phase states."""
     input_ids, _labels, answer_positions = encode_supervised_batch(
         tokenizer,
         batch,
@@ -138,7 +138,33 @@ def forward_answer_batch(
     )
     answer_loss = F.cross_entropy(answer_logits, targets)
     answer_hidden = hidden[row_ids, answer_positions]
-    return answer_loss, answer_logits, targets, answer_hidden
+    phase_states = out.get("phase_states")
+    answer_phase = None
+    if isinstance(phase_states, torch.Tensor):
+        answer_phase = phase_states[row_ids, answer_positions]
+    return answer_loss, answer_logits, targets, answer_hidden, answer_phase
+
+
+def supervised_contrastive_loss(
+    embeddings: torch.Tensor,
+    labels: torch.Tensor,
+    temperature: float = 0.2,
+) -> torch.Tensor:
+    """Small supervised contrastive loss for phase/structural states."""
+    if embeddings.size(0) < 3:
+        return embeddings.new_tensor(0.0)
+    embeddings = F.normalize(embeddings.float(), dim=-1)
+    logits = embeddings @ embeddings.T / temperature
+    eye = torch.eye(logits.size(0), dtype=torch.bool, device=logits.device)
+    logits = logits.masked_fill(eye, -float("inf"))
+    positive = (labels[:, None] == labels[None, :]) & ~eye
+    valid = positive.sum(dim=1) > 0
+    if not valid.any():
+        return embeddings.new_tensor(0.0)
+    log_probs = logits - torch.logsumexp(logits, dim=1, keepdim=True)
+    positive_log_probs = torch.where(positive, log_probs, torch.zeros_like(log_probs))
+    per_row = -positive_log_probs.sum(dim=1) / positive.sum(dim=1).clamp(min=1)
+    return per_row[valid].mean()
 
 
 @torch.no_grad()
@@ -157,7 +183,7 @@ def evaluate_geometry(
     target_rows: list[torch.Tensor] = []
     loss_rows: list[torch.Tensor] = []
     for batch in loader:
-        _loss, answer_logits, targets, answer_hidden = forward_answer_batch(
+        _loss, answer_logits, targets, answer_hidden, _answer_phase = forward_answer_batch(
             model,
             tokenizer,
             batch,
@@ -208,8 +234,16 @@ def train_condition(
     tokenizer: StoryTokenizer,
 ) -> dict[str, Any]:
     set_seed(seed)
+    model_condition = condition
+    phase_contrastive = False
+    if model_condition.endswith("_phase_contrastive"):
+        phase_contrastive = True
+        model_condition = model_condition.removesuffix("_phase_contrastive")
+    phase_contrastive_weight = args.phase_contrastive_weight
+    if phase_contrastive and phase_contrastive_weight == 0.0:
+        phase_contrastive_weight = 0.1
     device = get_device(args.device)
-    model, config = build_model(args, condition, tokenizer)
+    model, config = build_model(args, model_condition, tokenizer)
     model.to(device)
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
     loader = DataLoader(train_ds, batch_size=args.batch_size, shuffle=True, collate_fn=collate_examples)
@@ -237,8 +271,9 @@ def train_condition(
         losses = []
         answer_losses = []
         dispersions = []
+        phase_aux_losses = []
         for batch in loader:
-            answer_loss, _answer_logits, _targets, hidden = forward_answer_batch(
+            answer_loss, _answer_logits, targets, hidden, answer_phase = forward_answer_batch(
                 model,
                 tokenizer,
                 batch,
@@ -246,7 +281,18 @@ def train_condition(
                 device=device,
             )
             dispersion = representation_dispersion(hidden)
-            total_loss = answer_loss - args.dispersion_lambda * dispersion
+            phase_aux = hidden.new_tensor(0.0)
+            if (phase_contrastive or phase_contrastive_weight > 0.0) and answer_phase is not None:
+                phase_aux = supervised_contrastive_loss(
+                    answer_phase,
+                    targets,
+                    temperature=args.phase_contrastive_temperature,
+                )
+            total_loss = (
+                answer_loss
+                + phase_contrastive_weight * phase_aux
+                - args.dispersion_lambda * dispersion
+            )
             optimizer.zero_grad()
             total_loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
@@ -254,11 +300,13 @@ def train_condition(
             losses.append(float(total_loss.item()))
             answer_losses.append(float(answer_loss.item()))
             dispersions.append(float(dispersion.item()))
+            phase_aux_losses.append(float(phase_aux.item()))
         row = {
             "epoch": float(epoch + 1),
             "total_loss": statistics.fmean(losses),
             "answer_loss": statistics.fmean(answer_losses),
             "train_dispersion": statistics.fmean(dispersions),
+            "phase_aux_loss": statistics.fmean(phase_aux_losses),
         }
         if getattr(args, "eval_each_epoch", False):
             val_metrics = evaluate(
@@ -298,10 +346,34 @@ def train_condition(
         max_length=args.max_length,
         device=device,
     )
+    checkpoint_path = None
+    if getattr(args, "save_models", False):
+        checkpoint_dir = args.output_dir / "checkpoints"
+        checkpoint_dir.mkdir(parents=True, exist_ok=True)
+        safe_condition = "".join(ch if ch.isalnum() or ch in "._-" else "_" for ch in condition)
+        checkpoint_path = checkpoint_dir / f"{safe_condition}_seed{seed}.pt"
+        torch.save(
+            {
+                "model_state_dict": model.state_dict(),
+                "condition": condition,
+                "model_condition": model_condition,
+                "seed": seed,
+                "args": jsonify(vars(args)),
+                "model_config": jsonify(getattr(config, "__dict__", {})),
+                "tokenizer": {
+                    "vocab_size": tokenizer.vocab_size,
+                    "word2id": tokenizer.word2id,
+                },
+            },
+            checkpoint_path,
+        )
     return {
         "condition": condition,
+        "model_condition": model_condition,
+        "phase_contrastive": phase_contrastive or phase_contrastive_weight > 0.0,
         "seed": seed,
         "params": sum(p.numel() for p in model.parameters()),
+        "checkpoint_path": str(checkpoint_path) if checkpoint_path else None,
         "config": {
             "use_phase_stream": getattr(config, "use_phase_stream", None),
             "use_resonance_bias": getattr(config, "use_resonance_bias", None),
@@ -311,7 +383,9 @@ def train_condition(
             "phase_update_mode": getattr(config, "phase_update_mode", None),
             "phase_condition_qk": getattr(config, "phase_condition_qk", None),
             "n_structural_heads": getattr(config, "n_structural_heads", None),
+            "attention_variant": getattr(config, "attention_variant", None),
             "dispersion_lambda": args.dispersion_lambda,
+            "phase_contrastive_weight": phase_contrastive_weight,
         },
         "before": before,
         "after": after,
@@ -430,7 +504,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--resonance_blend", type=float, default=0.3)
     parser.add_argument("--dataset_seed", type=int, default=4000)
     parser.add_argument("--dispersion_lambda", type=float, default=0.0)
+    parser.add_argument("--phase_contrastive_weight", type=float, default=0.0)
+    parser.add_argument("--phase_contrastive_temperature", type=float, default=0.2)
     parser.add_argument("--eval_each_epoch", action="store_true")
+    parser.add_argument("--save_models", action="store_true", help="Save trained model checkpoints for interpretability audits.")
     return parser.parse_args()
 
 

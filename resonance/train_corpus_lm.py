@@ -111,7 +111,12 @@ def make_config(args: argparse.Namespace, name: str, vocab_size: int, resonance:
         "learning_rate": args.lr,
     }
     if not resonance:
-        return StandardConfig(**common)
+        attention_variant = "standard"
+        if name in {"standard_alibi", "standard_iso_alibi"}:
+            attention_variant = "alibi"
+        elif name in {"standard_deberta_lite", "standard_iso_deberta_lite"}:
+            attention_variant = "deberta_lite"
+        return StandardConfig(**common, attention_variant=attention_variant)
     return ResonanceConfig(
         **common,
         n_frequencies=args.n_frequencies,
@@ -123,9 +128,16 @@ def make_config(args: argparse.Namespace, name: str, vocab_size: int, resonance:
 
 
 def train_one(args: argparse.Namespace, condition: str, train_ds, val_ds, vocab_size: int) -> dict:
-    resonance = condition != "standard"
-    config = make_config(args, condition, vocab_size, resonance=resonance)
     base = condition.removesuffix("_normalized")
+    resonance = base not in {
+        "standard",
+        "standard_alibi",
+        "standard_deberta_lite",
+        "standard_iso",
+        "standard_iso_alibi",
+        "standard_iso_deberta_lite",
+    }
+    config = make_config(args, condition, vocab_size, resonance=resonance)
     if base == "phase_stream_only":
         config.use_phase_stream = True
         config.use_resonance_bias = False
@@ -160,7 +172,13 @@ def train_one(args: argparse.Namespace, condition: str, train_ds, val_ds, vocab_
         config.use_phase_stream = True
         config.use_resonance_bias = False
         config.n_structural_heads = 1
-    model = StandardTransformer(config) if condition == "standard" else ResonanceTransformer(config)
+    if base == "relational_stream_lite":
+        config.use_phase_stream = False
+        config.use_resonance_bias = True
+        config.phase_update_mode = "mlp"
+        config.resonance_kernel = "bilinear"
+        config.n_structural_heads = 1
+    model = StandardTransformer(config) if not resonance else ResonanceTransformer(config)
     started = time.time()
     history = train_model(
         model,
