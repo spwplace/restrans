@@ -225,6 +225,10 @@
     @apply mb-2 block text-base font-semibold text-foreground;
   }
 
+  .section-note {
+    @apply my-4;
+  }
+
   .page-tile {
     @apply transition-colors hover:border-foreground/30 hover:bg-background;
   }

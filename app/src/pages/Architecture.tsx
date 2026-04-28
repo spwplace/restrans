@@ -1,4 +1,15 @@
-import { architectureSteps, architectureVariants, requiredBaselines } from "@/data/research";
+import {
+  architectureMatrixRows,
+  architectureMatrixRunFacts,
+  architectureMatrixTakeaways,
+  architectureSteps,
+  architectureVariants,
+  requiredBaselines,
+} from "@/data/research";
+
+function StatusPill({ status }: { status: string }) {
+  return <span className={`status-pill ${status.replaceAll(" ", "-")}`}>{status}</span>;
+}
 
 export default function Architecture() {
   return (
@@ -66,6 +77,72 @@ hidden = transformer_blocks(blend(semantic, project(phase)))`}</pre>
       </section>
 
       <section className="section-band muted-band">
+        <div className="section-heading">
+          <p className="eyebrow">Local matrix smoke</p>
+          <h2>Every registered variant now runs through the same harness</h2>
+          <p>
+            This is a tiny implementation-health matrix, not a converged benchmark. Its value is
+            that it exercises the full architectural surface and tells us which comparators and
+            variants deserve real medium-scale runs.
+          </p>
+        </div>
+        <div className="two-column">
+          {architectureMatrixRunFacts.map((fact) => (
+            <article className="note-panel" key={fact.label}>
+              <h3>{fact.label}</h3>
+              <p>{fact.value}</p>
+            </article>
+          ))}
+        </div>
+        <div className="note-panel section-note">
+          <h3>Readout</h3>
+          <ul className="compact-list">
+            {architectureMatrixTakeaways.map((takeaway) => (
+              <li key={takeaway}>{takeaway}</li>
+            ))}
+          </ul>
+        </div>
+        <div className="table-wrap">
+          <table className="research-table">
+            <thead>
+              <tr>
+                <th>Rank</th>
+                <th>Condition</th>
+                <th>Mean acc</th>
+                <th>Acc-maj</th>
+                <th>Loss gain</th>
+                <th>Label gap</th>
+                <th>Best task</th>
+                <th>Status</th>
+                <th>Read</th>
+              </tr>
+            </thead>
+            <tbody>
+              {architectureMatrixRows.map((row) => (
+                <tr key={row.condition}>
+                  <td>{row.rank}</td>
+                  <td>
+                    <code>{row.condition}</code>
+                  </td>
+                  <td>{row.meanAcc}</td>
+                  <td>{row.accMinusMajority}</td>
+                  <td>{row.lossGain}</td>
+                  <td>{row.labelGap}</td>
+                  <td>
+                    <code>{row.bestTask}</code>
+                  </td>
+                  <td>
+                    <StatusPill status={row.status} />
+                  </td>
+                  <td>{row.read}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section className="section-band">
         <div className="section-heading">
           <p className="eyebrow">Baseline discipline</p>
           <h2>Comparators required by the literature review</h2>

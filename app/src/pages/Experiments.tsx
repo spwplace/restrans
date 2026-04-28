@@ -1,6 +1,7 @@
-import { evidenceRows } from "@/data/research";
+import { architectureMatrixRows, architectureMatrixTakeaways, evidenceRows } from "@/data/research";
 
 const signalBars = [
+  { label: "Matrix smoke: standard vs structural cluster", standard: 55.6, resonance: 56.9 },
   { label: "BLiMP wh-island n=150", standard: 71.1, resonance: 79.3 },
   { label: "BLiMP wh-island n=100", standard: 56.5, resonance: 66.0 },
   { label: "Cap matching smoke", standard: 53.1, resonance: 54.2 },
@@ -58,6 +59,54 @@ export default function Experiments() {
               ))}
             </tbody>
           </table>
+        </div>
+      </section>
+
+      <section className="section-band">
+        <div className="section-heading">
+          <p className="eyebrow">Latest matrix</p>
+          <h2>Architectural variants are now compared in one harness</h2>
+          <p>
+            The local matrix is deliberately small. It tells us that the software surface is ready
+            and that the literature baselines are serious: the DeBERTa-lite conditions currently
+            lead the aggregate, while the structural variants cluster closely behind.
+          </p>
+        </div>
+        <div className="table-wrap">
+          <table className="research-table">
+            <thead>
+              <tr>
+                <th>Rank</th>
+                <th>Condition</th>
+                <th>Mean acc</th>
+                <th>Best task</th>
+                <th>Read</th>
+              </tr>
+            </thead>
+            <tbody>
+              {architectureMatrixRows.slice(0, 8).map((row) => (
+                <tr key={row.condition}>
+                  <td>{row.rank}</td>
+                  <td>
+                    <code>{row.condition}</code>
+                  </td>
+                  <td>{row.meanAcc}</td>
+                  <td>
+                    <code>{row.bestTask}</code>
+                  </td>
+                  <td>{row.read}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <div className="note-panel section-note">
+          <h3>What changes next</h3>
+          <ul className="compact-list">
+            {architectureMatrixTakeaways.map((takeaway) => (
+              <li key={takeaway}>{takeaway}</li>
+            ))}
+          </ul>
         </div>
       </section>
 
