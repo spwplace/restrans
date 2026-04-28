@@ -81,6 +81,80 @@ def story_role_word_groups() -> dict[str, list[str]]:
     }
 
 
+def _standard_param_estimate(
+    *,
+    vocab_size: int,
+    max_seq_len: int,
+    embed_dim: int,
+    n_layers: int,
+    ff_dim: int,
+) -> int:
+    embed = vocab_size * embed_dim
+    pos = max_seq_len * embed_dim
+    attn = n_layers * (4 * embed_dim * embed_dim)
+    ff = n_layers * (2 * embed_dim * ff_dim + ff_dim + embed_dim)
+    norms = (2 * n_layers + 1) * (2 * embed_dim)
+    return embed + pos + attn + ff + norms
+
+
+def _resonance_param_estimate(
+    *,
+    vocab_size: int,
+    max_seq_len: int,
+    embed_dim: int,
+    n_layers: int,
+    ff_dim: int,
+    n_frequencies: int,
+) -> int:
+    base = _standard_param_estimate(
+        vocab_size=vocab_size,
+        max_seq_len=max_seq_len,
+        embed_dim=embed_dim,
+        n_layers=n_layers,
+        ff_dim=ff_dim,
+    )
+    phase = vocab_size * n_frequencies
+    phase_proj = n_frequencies * embed_dim
+    blend = embed_dim
+    resonance_weights = n_layers
+    return base + phase + phase_proj + blend + resonance_weights
+
+
+def _iso_standard_common(args: argparse.Namespace, common: dict[str, Any]) -> dict[str, Any]:
+    target = _resonance_param_estimate(
+        vocab_size=common["vocab_size"],
+        max_seq_len=common["max_seq_len"],
+        embed_dim=args.embed_dim,
+        n_layers=args.layers,
+        ff_dim=args.ff_dim,
+        n_frequencies=args.n_frequencies,
+    )
+    base_dim = args.embed_dim
+    heads = args.heads
+    best = dict(common)
+    best_gap = float("inf")
+    for dim in range(base_dim, base_dim + 1025):
+        if dim % heads != 0:
+            continue
+        ff_dim = max(heads, int(round(args.ff_dim * dim / base_dim)))
+        estimate = _standard_param_estimate(
+            vocab_size=common["vocab_size"],
+            max_seq_len=common["max_seq_len"],
+            embed_dim=dim,
+            n_layers=args.layers,
+            ff_dim=ff_dim,
+        )
+        gap = abs(estimate - target)
+        if gap < best_gap:
+            best_gap = gap
+            best = dict(common)
+            best["embed_dim"] = dim
+            best["ff_dim"] = ff_dim
+        if estimate >= target and gap <= best_gap:
+            break
+    return best
+
+
 def apply_story_phase_prior(
     model: ResonanceTransformer,
     tokenizer: StoryTokenizer,
@@ -192,18 +266,77 @@ def build_model(args: argparse.Namespace, condition: str, tokenizer: StoryTokeni
     if base_condition == "standard":
         config = StandardConfig(name=condition, **common)
         return StandardTransformer(config), config
-    if base_condition not in {"resonance_full", "phase_stream_only", "bias_only", "resonance_inert"}:
+    if base_condition == "standard_iso":
+        config = StandardConfig(name=condition, **_iso_standard_common(args, common))
+        return StandardTransformer(config), config
+
+    variant_options: dict[str, dict[str, Any]] = {
+        "resonance_full": {
+            "use_phase_stream": True,
+            "use_resonance_bias": True,
+        },
+        "phase_stream_only": {
+            "use_phase_stream": True,
+            "use_resonance_bias": False,
+        },
+        "bias_only": {
+            "use_phase_stream": False,
+            "use_resonance_bias": True,
+        },
+        "resonance_inert": {
+            "use_phase_stream": False,
+            "use_resonance_bias": False,
+        },
+        "phase_dynamic_mlp": {
+            "use_phase_stream": True,
+            "use_resonance_bias": False,
+            "phase_update_mode": "mlp",
+        },
+        "phase_dynamic_attn": {
+            "use_phase_stream": True,
+            "use_resonance_bias": False,
+            "phase_update_mode": "self_attn",
+        },
+        "phase_qk_film": {
+            "use_phase_stream": True,
+            "use_resonance_bias": False,
+            "phase_condition_qk": "film",
+        },
+        "phase_dynamic_qk_film": {
+            "use_phase_stream": True,
+            "use_resonance_bias": False,
+            "phase_update_mode": "mlp",
+            "phase_condition_qk": "film",
+        },
+        "resonance_dynamic_mlp": {
+            "use_phase_stream": True,
+            "use_resonance_bias": True,
+            "phase_update_mode": "mlp",
+        },
+        "complex_directional": {
+            "use_phase_stream": True,
+            "use_resonance_bias": True,
+            "resonance_kernel": "directional_complex",
+        },
+        "structural_heads_1": {
+            "use_phase_stream": True,
+            "use_resonance_bias": False,
+            "n_structural_heads": 1,
+            "structural_head_scale": 1.0,
+        },
+    }
+    if base_condition not in variant_options:
         raise ValueError(f"unknown condition: {condition}")
+    options = variant_options[base_condition]
     config = ResonanceConfig(
         name=condition,
         n_frequencies=args.n_frequencies,
         phase_init_std=args.phase_init_std,
         resonance_attn_weight=args.resonance_attn_weight,
         resonance_blend=args.resonance_blend,
-        use_phase_stream=base_condition in {"resonance_full", "phase_stream_only"},
-        use_resonance_bias=base_condition in {"resonance_full", "bias_only"},
         center_resonance=centered,
         normalize_resonance=normalized,
+        **options,
         **common,
     )
     model = ResonanceTransformer(config)

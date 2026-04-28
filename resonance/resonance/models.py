@@ -168,6 +168,7 @@ class StandardTransformer(nn.Module):
         )
 
         self.apply(self._init_weights)
+        self._init_variant_weights()
         self.n_params = sum(p.numel() for p in self.parameters())
 
     def _init_weights(self, module: nn.Module) -> None:
@@ -181,6 +182,21 @@ class StandardTransformer(nn.Module):
         elif isinstance(module, nn.LayerNorm):
             nn.init.ones_(module.weight)
             nn.init.zeros_(module.bias)
+
+    def _init_variant_weights(self) -> None:
+        """Reset opt-in variant adapters close to identity after global init."""
+        for module in self.modules():
+            if isinstance(module, ResonanceAttention) and module.phase_condition_qk == "film":
+                assert module.q_film is not None and module.k_film is not None
+                nn.init.zeros_(module.q_film.weight)
+                nn.init.zeros_(module.q_film.bias)
+                nn.init.zeros_(module.k_film.weight)
+                nn.init.zeros_(module.k_film.bias)
+            if isinstance(module, PhaseUpdateBlock):
+                last = module.mlp[-1]
+                if isinstance(last, nn.Linear):
+                    nn.init.zeros_(last.weight)
+                    nn.init.zeros_(last.bias)
 
     def forward(
         self,
@@ -440,7 +456,29 @@ class ResonanceAttention(nn.Module):
         self.resonance_weight = nn.Parameter(
             torch.full((config.n_heads,), attn_weight)
         )
+        n_structural = max(0, min(config.n_structural_heads, config.n_heads))
+        self.n_structural_heads = n_structural
+        if n_structural > 0:
+            self.structural_head_weight = nn.Parameter(
+                torch.full((n_structural,), config.structural_head_scale)
+            )
+        else:
+            self.register_parameter("structural_head_weight", None)
         self.dropout = nn.Dropout(config.dropout)
+
+        self.phase_condition_qk = config.phase_condition_qk
+        if self.phase_condition_qk == "film":
+            self.q_film = nn.Linear(config.n_frequencies, 2 * config.embed_dim)
+            self.k_film = nn.Linear(config.n_frequencies, 2 * config.embed_dim)
+            nn.init.zeros_(self.q_film.weight)
+            nn.init.zeros_(self.q_film.bias)
+            nn.init.zeros_(self.k_film.weight)
+            nn.init.zeros_(self.k_film.bias)
+        elif self.phase_condition_qk == "none":
+            self.q_film = None
+            self.k_film = None
+        else:
+            raise ValueError(f"unknown phase_condition_qk: {self.phase_condition_qk}")
 
         # Bias application mode (modular, swappable)
         if bias_mode is not None:
@@ -482,6 +520,7 @@ class ResonanceAttention(nn.Module):
         x: torch.Tensor,
         resonance: torch.Tensor,
         mask: torch.Tensor | None = None,
+        phases: torch.Tensor | None = None,
     ) -> torch.Tensor:
         """Apply resonance-biased multi-head attention.
 
@@ -503,14 +542,53 @@ class ResonanceAttention(nn.Module):
         )
         q, k, v = qkv[0], qkv[1], qkv[2]
 
+        if self.phase_condition_qk == "film":
+            if phases is None:
+                raise ValueError("phases are required for phase_condition_qk='film'")
+            q_mod = self.q_film(phases).reshape(
+                batch_size, seq_len, 2, self.n_heads, self.head_dim
+            )
+            k_mod = self.k_film(phases).reshape(
+                batch_size, seq_len, 2, self.n_heads, self.head_dim
+            )
+            q_gamma, q_beta = q_mod[:, :, 0], q_mod[:, :, 1]
+            k_gamma, k_beta = k_mod[:, :, 0], k_mod[:, :, 1]
+            q_gamma = q_gamma.permute(0, 2, 1, 3)
+            q_beta = q_beta.permute(0, 2, 1, 3)
+            k_gamma = k_gamma.permute(0, 2, 1, 3)
+            k_beta = k_beta.permute(0, 2, 1, 3)
+            q = q * (1.0 + q_gamma) + q_beta
+            k = k * (1.0 + k_gamma) + k_beta
+
         attn = torch.matmul(q, k.transpose(-2, -1)) * self.scale
+        prepared_resonance: torch.Tensor | None = None
+
+        if self.n_structural_heads > 0:
+            prepared_resonance = self._prepare_resonance_bias(resonance, mask)
+            structural_logits = prepared_resonance.unsqueeze(1) * self.structural_head_weight.view(
+                1, self.n_structural_heads, 1, 1
+            )
+            attn = attn.clone()
+            attn[:, : self.n_structural_heads] = structural_logits
+
         # Apply resonance bias via modular bias mode
         if self.config.use_resonance_bias:
-            resonance_bias = self._prepare_resonance_bias(resonance, mask)
+            resonance_bias = prepared_resonance
+            if resonance_bias is None:
+                resonance_bias = self._prepare_resonance_bias(resonance, mask)
             resonance_bias = resonance_bias.unsqueeze(1) * self.resonance_weight.view(
                 1, self.n_heads, 1, 1
             )
-            attn = self.bias_mode(attn, resonance_bias, mask)
+            if self.n_structural_heads > 0:
+                if self.n_structural_heads < self.n_heads:
+                    attn_tail = self.bias_mode(
+                        attn[:, self.n_structural_heads :],
+                        resonance_bias[:, self.n_structural_heads :],
+                        mask,
+                    )
+                    attn = torch.cat([attn[:, : self.n_structural_heads], attn_tail], dim=1)
+            else:
+                attn = self.bias_mode(attn, resonance_bias, mask)
 
         if mask is not None:
             attn = attn.masked_fill(mask == 0, float("-inf"))
@@ -520,6 +598,64 @@ class ResonanceAttention(nn.Module):
 
         out = torch.matmul(attn, v).transpose(1, 2).reshape(batch_size, seq_len, -1)
         return self.out_proj(out)
+
+
+class PhaseUpdateBlock(nn.Module):
+    """Layerwise update for the compact phase/structural state."""
+
+    def __init__(self, config: ResonanceConfig) -> None:
+        super().__init__()
+        self.config = config
+        self.mode = config.phase_update_mode
+        self.scale = config.phase_update_scale
+        hidden = max(config.n_frequencies, config.n_frequencies * config.phase_update_hidden_mult)
+        self.ln = nn.LayerNorm(config.n_frequencies)
+        self.mlp = nn.Sequential(
+            nn.Linear(config.n_frequencies, hidden),
+            nn.GELU(),
+            nn.Linear(hidden, config.n_frequencies),
+        )
+        if self.mode == "self_attn":
+            n_heads = max(1, min(config.phase_update_heads, config.n_frequencies))
+            while config.n_frequencies % n_heads != 0 and n_heads > 1:
+                n_heads -= 1
+            self.attn_ln = nn.LayerNorm(config.n_frequencies)
+            self.attn = nn.MultiheadAttention(
+                embed_dim=config.n_frequencies,
+                num_heads=n_heads,
+                dropout=config.dropout,
+                batch_first=True,
+            )
+        elif self.mode in {"none", "mlp"}:
+            self.attn_ln = None
+            self.attn = None
+        else:
+            raise ValueError(f"unknown phase_update_mode: {self.mode}")
+
+    def forward(
+        self,
+        phases: torch.Tensor,
+        mask: torch.Tensor | None = None,
+    ) -> torch.Tensor:
+        if self.mode == "none":
+            return phases
+        updated = phases
+        if self.mode == "self_attn":
+            attn_mask = None
+            if mask is not None:
+                # nn.MultiheadAttention uses True for disallowed positions.
+                attn_mask = (mask.squeeze(0) == 0).to(device=phases.device)
+            attn_input = self.attn_ln(updated)
+            attn_out, _ = self.attn(
+                attn_input,
+                attn_input,
+                attn_input,
+                attn_mask=attn_mask,
+                need_weights=False,
+            )
+            updated = updated + self.scale * attn_out
+        updated = updated + self.scale * self.mlp(self.ln(updated))
+        return updated
 
 
 class ResonanceBlock(nn.Module):
@@ -538,6 +674,7 @@ class ResonanceBlock(nn.Module):
         preset: str | None = None,
     ) -> None:
         super().__init__()
+        self.config = config
         self.ln1 = nn.LayerNorm(config.embed_dim)
         self.attn = ResonanceAttention(config, bias_mode=bias_mode, preset=preset)
         self.ln2 = nn.LayerNorm(config.embed_dim)
@@ -548,6 +685,21 @@ class ResonanceBlock(nn.Module):
             nn.Dropout(config.dropout),
         )
         self.kernel = kernel  # Optional per-layer kernel override
+        self.dynamic_kernel = (
+            build_kernel(
+                config.resonance_kernel,
+                config.n_frequencies,
+                gamma=config.kernel_gamma,
+                learnable_gamma=config.kernel_learnable_gamma,
+                rank=config.kernel_rank,
+                temperature=config.kernel_temperature,
+            )
+            if config.phase_update_mode != "none"
+            else None
+        )
+        self.phase_update = (
+            PhaseUpdateBlock(config) if config.phase_update_mode != "none" else None
+        )
 
     def forward(
         self,
@@ -555,7 +707,7 @@ class ResonanceBlock(nn.Module):
         resonance: torch.Tensor,
         mask: torch.Tensor | None = None,
         phases: torch.Tensor | None = None,
-    ) -> torch.Tensor:
+    ) -> tuple[torch.Tensor, torch.Tensor | None]:
         """Forward pass through one resonance transformer block.
 
         Args:
@@ -568,11 +720,15 @@ class ResonanceBlock(nn.Module):
         Returns:
             Updated tensor of the same shape.
         """
+        if phases is not None and self.phase_update is not None:
+            phases = self.phase_update(phases, mask)
         if self.kernel is not None and phases is not None:
             resonance = self.kernel(phases)
-        x = x + self.attn(self.ln1(x), resonance, mask)
+        elif self.dynamic_kernel is not None and phases is not None:
+            resonance = self.dynamic_kernel(phases)
+        x = x + self.attn(self.ln1(x), resonance, mask, phases)
         x = x + self.ff(self.ln2(x))
-        return x
+        return x, phases
 
 
 class ResonanceTransformer(nn.Module):
@@ -671,7 +827,7 @@ class ResonanceTransformer(nn.Module):
         mask = self.causal_mask[:seq_len, :seq_len].unsqueeze(0)
 
         for block in self.blocks:
-            x = block(x, resonance, mask, phases)
+            x, phases = block(x, resonance, mask, phases)
 
         hidden = self.ln_final(x)
         logits = self.lm_head(hidden)

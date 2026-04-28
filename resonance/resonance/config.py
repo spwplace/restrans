@@ -67,6 +67,16 @@ class ResonanceConfig:
     bias_gate_init: float = 0.0
     # Initialization preset
     init_preset: str = "default"
+    # Experimental structural-channel variants
+    phase_update_mode: str = "none"          # none | mlp | self_attn
+    phase_update_scale: float = 0.1
+    phase_update_hidden_mult: int = 2
+    phase_update_heads: int = 1
+    phase_condition_qk: str = "none"         # none | film
+    n_structural_heads: int = 0              # heads whose logits come from phase structure
+    structural_head_scale: float = 1.0
+    relation_value_mode: str = "none"        # reserved: none | additive
+    aux_phase_loss_weight: float = 0.0
 
 
 def count_params(config: StandardConfig | ResonanceConfig) -> int:

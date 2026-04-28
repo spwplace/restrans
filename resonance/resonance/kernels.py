@@ -206,6 +206,36 @@ class AttentionKernel(ResonanceKernel):
         return F.softmax(logits / self.temperature, dim=-1)
 
 
+class DirectionalComplexKernel(ResonanceKernel):
+    """Learned directional phase-difference kernel.
+
+    The default cosine-difference kernel is symmetric: ``R[i,j] == R[j,i]``.
+    Many structural relations are not symmetric (binder -> use, cause -> effect,
+    opener -> closer), so this kernel keeps both cosine and sine terms:
+
+        R[i,j] = Σ_f wc_f cos(φ_i^f - φ_j^f) + ws_f sin(φ_i^f - φ_j^f)
+
+    The sine branch is antisymmetric and can encode order/direction while still
+    remaining a compact scalar relation matrix for the existing attention path.
+    """
+
+    def __init__(self, n_frequencies: int) -> None:
+        super().__init__()
+        self.cos_weights = nn.Parameter(torch.zeros(n_frequencies))
+        self.sin_weights = nn.Parameter(torch.zeros(n_frequencies))
+        self.output_scale = nn.Parameter(torch.tensor(1.0))
+
+    def forward(self, phases: torch.Tensor) -> torch.Tensor:
+        phase_diff = phases.unsqueeze(2) - phases.unsqueeze(1)
+        cos_weights = F.softmax(self.cos_weights, dim=0)
+        # Sine weights are signed but normalized to keep the scale predictable.
+        sin_weights = torch.tanh(self.sin_weights)
+        sin_weights = sin_weights / sin_weights.abs().sum().clamp(min=1.0)
+        cos_part = (torch.cos(phase_diff) * cos_weights.view(1, 1, 1, -1)).sum(dim=-1)
+        sin_part = (torch.sin(phase_diff) * sin_weights.view(1, 1, 1, -1)).sum(dim=-1)
+        return self.output_scale * (cos_part + sin_part)
+
+
 # =============================================================================
 # Registry
 # =============================================================================
@@ -220,6 +250,7 @@ _KERNEL_REGISTRY: dict[str, Callable[..., ResonanceKernel]] = {
     "complex_magnitude": ComplexMagnitudeKernel,
     "complex_real": ComplexRealKernel,
     "attention": AttentionKernel,
+    "directional_complex": DirectionalComplexKernel,
 }
 
 
