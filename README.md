@@ -1,3 +1,5 @@
+(note to others: this repo is some kimislop mostly. beware/begone)
+
 # Resonance Transformer Research Harness
 
 This repo contains the current experimental harness for evaluating phase /
