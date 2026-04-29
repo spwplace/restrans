@@ -4,7 +4,10 @@ import {
   architectureMatrixTakeaways,
   architectureSteps,
   architectureVariants,
+  capacityCaution,
+  persvatiUnificationRows,
   requiredBaselines,
+  signalMatrixRows,
 } from "@/data/research";
 
 function StatusPill({ status }: { status: string }) {
@@ -78,12 +81,111 @@ hidden = transformer_blocks(blend(semantic, project(phase)))`}</pre>
 
       <section className="section-band muted-band">
         <div className="section-heading">
-          <p className="eyebrow">Local matrix smoke</p>
-          <h2>Every registered variant now runs through the same harness</h2>
+          <p className="eyebrow">Signal matrix (nextop MPS)</p>
+          <h2>Focused 3-task matrix: 64d / 2 layers / 3 seeds / 4 epochs</h2>
           <p>
-            This is a tiny implementation-health matrix, not a converged benchmark. Its value is
-            that it exercises the full architectural surface and tells us which comparators and
-            variants deserve real medium-scale runs.
+            This skips weak canaries and tests 12 conditions on unification, cap matching, and
+            algebraic protocol. The structural variants cluster tightly; the only clear differentiator
+            is that Q/K-conditioned phase (phase_dynamic_qk_film) consistently competes with strong
+            baselines while static bias-only does not.
+          </p>
+        </div>
+        <div className="table-wrap">
+          <table className="research-table">
+            <thead>
+              <tr>
+                <th>Rank</th>
+                <th>Condition</th>
+                <th>Mean acc</th>
+                <th>Acc-maj</th>
+                <th>Loss gain</th>
+                <th>Label gap</th>
+                <th>Best task</th>
+                <th>Status</th>
+                <th>Read</th>
+              </tr>
+            </thead>
+            <tbody>
+              {signalMatrixRows.map((row) => (
+                <tr key={row.condition}>
+                  <td>{row.rank}</td>
+                  <td>
+                    <code>{row.condition}</code>
+                  </td>
+                  <td>{row.meanAcc}</td>
+                  <td>{row.accMinusMajority}</td>
+                  <td>{row.lossGain}</td>
+                  <td>{row.labelGap}</td>
+                  <td>
+                    <code>{row.bestTask}</code>
+                  </td>
+                  <td>
+                    <StatusPill status={row.status} />
+                  </td>
+                  <td>{row.read}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section className="section-band">
+        <div className="section-heading">
+          <p className="eyebrow">Medium-scale persvati (ROCm)</p>
+          <h2>Unification depth 5 at 128d / 4 layers / 2 seeds / 5 epochs</h2>
+          <p>
+            The ranking reverses at scale. This could be a real capacity-dependent effect or an
+            artifact of seed variance, param mismatch, and single-task overfitting. The language
+            modeling runs will provide an independent check.
+          </p>
+        </div>
+        <div className="table-wrap">
+          <table className="research-table">
+            <thead>
+              <tr>
+                <th>Rank</th>
+                <th>Condition</th>
+                <th>Avg best</th>
+                <th>Avg final</th>
+                <th>Seeds</th>
+                <th>Params</th>
+              </tr>
+            </thead>
+            <tbody>
+              {persvatiUnificationRows.map((row) => (
+                <tr key={row.condition}>
+                  <td>{row.rank}</td>
+                  <td>
+                    <code>{row.condition}</code>
+                  </td>
+                  <td>{row.avgBest}</td>
+                  <td>{row.avgFinal}</td>
+                  <td>{row.seeds}</td>
+                  <td>{row.params}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <div className="note-panel section-note">
+          <h3>Capacity caution</h3>
+          <ul className="compact-list">
+            {capacityCaution.map((note) => (
+              <li key={note}>{note}</li>
+            ))}
+          </ul>
+        </div>
+      </section>
+
+      <section className="section-band muted-band">
+        <div className="section-heading">
+          <p className="eyebrow">Smoke archive</p>
+          <h2>Original 20-condition health check</h2>
+          <p>
+            The first tiny matrix validated that every registered variant instantiates, trains, and
+            summarizes cleanly. Those results are superseded by the focused signal matrix above, but
+            they remain useful as a software-surface regression test.
           </p>
         </div>
         <div className="two-column">

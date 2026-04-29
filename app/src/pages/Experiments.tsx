@@ -1,4 +1,4 @@
-import { architectureMatrixRows, architectureMatrixTakeaways, evidenceRows } from "@/data/research";
+import { architectureMatrixTakeaways, capacityCaution, evidenceRows, lmRunFacts, persvatiUnificationRows, signalMatrixRows } from "@/data/research";
 
 const signalBars = [
   { label: "Matrix smoke: standard vs structural cluster", standard: 55.6, resonance: 56.9 },
@@ -64,12 +64,12 @@ export default function Experiments() {
 
       <section className="section-band">
         <div className="section-heading">
-          <p className="eyebrow">Latest matrix</p>
-          <h2>Architectural variants are now compared in one harness</h2>
+          <p className="eyebrow">Signal matrix (nextop MPS)</p>
+          <h2>Small-model 3-task aggregate: 64d / 2 layers / 3 seeds / 4 epochs</h2>
           <p>
-            The local matrix is deliberately small. It tells us that the software surface is ready
-            and that the literature baselines are serious: the DeBERTa-lite conditions currently
-            lead the aggregate, while the structural variants cluster closely behind.
+            This is the first focused matrix after the smoke test. It skips weak canaries (ListOps)
+            and spends compute on tasks where structural interfaces might matter: unification depth 5,
+            cap matching depth 4, and algebraic protocol depth 4.
           </p>
         </div>
         <div className="table-wrap">
@@ -84,7 +84,7 @@ export default function Experiments() {
               </tr>
             </thead>
             <tbody>
-              {architectureMatrixRows.slice(0, 8).map((row) => (
+              {signalMatrixRows.slice(0, 8).map((row) => (
                 <tr key={row.condition}>
                   <td>{row.rank}</td>
                   <td>
@@ -101,12 +101,78 @@ export default function Experiments() {
           </table>
         </div>
         <div className="note-panel section-note">
-          <h3>What changes next</h3>
+          <h3>Small-model takeaway</h3>
           <ul className="compact-list">
             {architectureMatrixTakeaways.map((takeaway) => (
               <li key={takeaway}>{takeaway}</li>
             ))}
           </ul>
+        </div>
+      </section>
+
+      <section className="section-band muted-band">
+        <div className="section-heading">
+          <p className="eyebrow">Medium-scale persvati (ROCm)</p>
+          <h2>Unification depth 5 at 128d / 4 layers / 2 seeds / 5 epochs</h2>
+          <p>
+            The ranking flips completely at larger scale. Q/K-conditioned structural variants rise
+            to the top, while DeBERTa-lite baselines drop to the bottom. This is either a real
+            capacity-dependent effect or an artifact of seed variance and param mismatch.
+          </p>
+        </div>
+        <div className="table-wrap">
+          <table className="research-table">
+            <thead>
+              <tr>
+                <th>Rank</th>
+                <th>Condition</th>
+                <th>Avg best val acc</th>
+                <th>Avg final</th>
+                <th>Params</th>
+              </tr>
+            </thead>
+            <tbody>
+              {persvatiUnificationRows.map((row) => (
+                <tr key={row.condition}>
+                  <td>{row.rank}</td>
+                  <td>
+                    <code>{row.condition}</code>
+                  </td>
+                  <td>{row.avgBest}</td>
+                  <td>{row.avgFinal}</td>
+                  <td>{row.params}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <div className="note-panel section-note">
+          <h3>Capacity caution</h3>
+          <ul className="compact-list">
+            {capacityCaution.map((note) => (
+              <li key={note}>{note}</li>
+            ))}
+          </ul>
+        </div>
+      </section>
+
+      <section className="section-band">
+        <div className="section-heading">
+          <p className="eyebrow">Language modeling</p>
+          <h2>CPU LM runs on BabyLM and TinyStories</h2>
+          <p>
+            Synthetic tasks are necessary but not sufficient. If structural streams only help on
+            hand-designed unification tasks, the effect is not general. Language modeling provides
+            an out-of-domain check where structure is implicit and surface statistics are strong.
+          </p>
+        </div>
+        <div className="two-column">
+          {lmRunFacts.map((fact) => (
+            <article className="note-panel" key={fact.label}>
+              <h3>{fact.label}</h3>
+              <p>{fact.value}</p>
+            </article>
+          ))}
         </div>
       </section>
 
@@ -152,16 +218,19 @@ export default function Experiments() {
             <h3>Current run locations</h3>
             <ul className="compact-list">
               <li>
-                <code>resonance/outputs/hyper_2026_04_28</code> for first-wave sweeps.
+                <code>resonance/outputs/signal_matrix_nextop_2026_04_28_mps</code> for local MPS signal matrix.
               </li>
               <li>
-                <code>resonance/outputs/hyper_second_wave_2026_04_28</code> for remote GPU jobs.
+                <code>resonance/outputs/signal_matrix_persvati_2026_04_28_rocm_v2</code> for remote GPU medium matrix.
               </li>
               <li>
-                <code>resonance/outputs/hyper_mps_algebraic_2026_04_28</code> for local MPS jobs.
+                <code>resonance/outputs/cpu_lm_focused_2026_04_28</code> for persvati CPU LM runs.
               </li>
               <li>
-                <code>resonance/outputs/lab_notebook_hyper_live</code> for aggregated plots and tables.
+                <code>resonance/outputs/cpu_lm_nextop_tinystories_2026_04_28</code> for local CPU TinyStories.
+              </li>
+              <li>
+                <code>resonance/outputs/cpu_lm_nextop_babylm_2026_04_28</code> for local CPU BabyLM.
               </li>
             </ul>
           </div>
