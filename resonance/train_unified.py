@@ -356,7 +356,7 @@ def train_unified(args: argparse.Namespace) -> dict[str, Any]:
         task_batches = 0
 
         num_batches = max(len(lm_loader), len(task_loader))
-        for _ in range(num_batches):
+        for step_in_epoch in range(num_batches):
             # Interleave: 2 LM batches, 1 task batch
             if global_step % 3 < 2:
                 try:
@@ -393,6 +393,13 @@ def train_unified(args: argparse.Namespace) -> dict[str, Any]:
             else:
                 epoch_task_loss += loss.item()
                 task_batches += 1
+
+            if step_in_epoch > 0 and step_in_epoch % 200 == 0:
+                print(
+                    f"  step {step_in_epoch}/{num_batches} | "
+                    f"lm_loss: {epoch_lm_loss/max(lm_batches,1):.4f} | "
+                    f"task_loss: {epoch_task_loss/max(task_batches,1):.4f}"
+                )
 
             global_step += 1
 
