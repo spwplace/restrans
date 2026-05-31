@@ -31,16 +31,19 @@ from resonance.device import enable_deterministic  # noqa: E402
 from story_query_eval import TemporalQueryDataset  # noqa: E402
 from synthetic.agreement import AgreementDataset  # noqa: E402
 from synthetic.algebraic_protocol import AlgebraicProtocolDataset  # noqa: E402
+from synthetic.automata_tasks import DFAEquivalenceDataset  # noqa: E402
 from synthetic.causal_intervention import CausalInterventionDataset  # noqa: E402
 from synthetic.cap_matching import CapMatchingDataset  # noqa: E402
 from synthetic.dyck import DyckDataset  # noqa: E402
 from synthetic.external_syntax import AgreementFileDataset, BlimpMinimalPairDataset, GenericProbeDataset  # noqa: E402
 from synthetic.graph_alias import GraphAliasDataset  # noqa: E402
+from synthetic.lambda_tasks import LambdaBetaStepDataset, LambdaEquivalenceDataset, LambdaTraceDataset  # noqa: E402
 from synthetic.listops import ListOpsDataset  # noqa: E402
 from synthetic.semantic_story import StoryTokenizer  # noqa: E402
 from synthetic.structural_paraphrase import StructuralParaphraseDataset  # noqa: E402
 from synthetic.template_equivalence import TemplateEquivalenceDataset  # noqa: E402
 from synthetic.unification import UnificationDataset  # noqa: E402
+from synthetic.vm_tasks import VMEquivalenceDataset, VMStepDataset, VMTraceDataset  # noqa: E402
 
 
 TASKS = (
@@ -54,6 +57,13 @@ TASKS = (
     "unification",
     "cap_matching",
     "algebraic_protocol",
+    "lambda_equivalence",
+    "lambda_beta_step",
+    "lambda_trace",
+    "vm_step",
+    "vm_trace",
+    "vm_equivalence",
+    "dfa_equivalence",
     "graph_alias",
     "causal_intervention",
     "structural_paraphrase",
@@ -98,6 +108,16 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max_attractors", type=int, default=4)
     parser.add_argument("--force_attractors", type=int, default=None)
     parser.add_argument("--depth", type=int, default=4)
+    parser.add_argument("--val_depth", type=int, default=None, help="Optional validation depth for extrapolation probes.")
+    parser.add_argument(
+        "--cap_mode",
+        choices=["mixed", "hard", "closure"],
+        default="mixed",
+        help="Cap-matching generator: mixed=random negatives, hard=matched hard negatives, closure=positives require Cap closure.",
+    )
+    parser.add_argument("--max_size", type=int, default=18)
+    parser.add_argument("--max_trace_steps", type=int, default=8)
+    parser.add_argument("--modulus", type=int, default=17)
     parser.add_argument("--n_templates", type=int, default=50)
     parser.add_argument("--dyck_mode", choices=["nested", "cross"], default="nested")
     parser.add_argument("--n_types", type=int, default=3)
@@ -165,6 +185,7 @@ def build_external(args: argparse.Namespace):
 
 
 def build_datasets(args: argparse.Namespace):
+    val_depth = args.val_depth if args.val_depth is not None else args.depth
     if args.task == "agreement":
         common = {
             "max_attractors": args.max_attractors,
@@ -197,17 +218,84 @@ def build_datasets(args: argparse.Namespace):
     if args.task == "unification":
         return (
             UnificationDataset(n_examples=args.train_examples, seed=args.dataset_seed, depth=args.depth),
-            UnificationDataset(n_examples=args.val_examples, seed=args.dataset_seed + 100_000, depth=args.depth),
+            UnificationDataset(n_examples=args.val_examples, seed=args.dataset_seed + 100_000, depth=val_depth),
         )
     if args.task == "cap_matching":
         return (
-            CapMatchingDataset(n_examples=args.train_examples, seed=args.dataset_seed, depth=args.depth),
-            CapMatchingDataset(n_examples=args.val_examples, seed=args.dataset_seed + 100_000, depth=args.depth),
+            CapMatchingDataset(
+                n_examples=args.train_examples,
+                seed=args.dataset_seed,
+                depth=args.depth,
+                mode=args.cap_mode,
+            ),
+            CapMatchingDataset(
+                n_examples=args.val_examples,
+                seed=args.dataset_seed + 100_000,
+                depth=val_depth,
+                mode=args.cap_mode,
+            ),
         )
     if args.task == "algebraic_protocol":
         return (
             AlgebraicProtocolDataset(n_examples=args.train_examples, seed=args.dataset_seed, depth=args.depth),
-            AlgebraicProtocolDataset(n_examples=args.val_examples, seed=args.dataset_seed + 100_000, depth=args.depth),
+            AlgebraicProtocolDataset(n_examples=args.val_examples, seed=args.dataset_seed + 100_000, depth=val_depth),
+        )
+    if args.task == "lambda_equivalence":
+        common = {"depth": args.depth, "max_size": args.max_size, "max_mutations": args.max_trace_steps}
+        return (
+            LambdaEquivalenceDataset(n_examples=args.train_examples, seed=args.dataset_seed, **common),
+            LambdaEquivalenceDataset(n_examples=args.val_examples, seed=args.dataset_seed + 100_000, **{**common, "depth": val_depth}),
+        )
+    if args.task == "lambda_beta_step":
+        common = {"depth": args.depth, "max_size": args.max_size}
+        return (
+            LambdaBetaStepDataset(n_examples=args.train_examples, seed=args.dataset_seed, **common),
+            LambdaBetaStepDataset(
+                n_examples=args.val_examples,
+                seed=args.dataset_seed + 100_000,
+                **{**common, "depth": val_depth},
+            ),
+        )
+    if args.task == "lambda_trace":
+        common = {"depth": args.depth, "max_size": args.max_size, "max_trace_steps": args.max_trace_steps}
+        return (
+            LambdaTraceDataset(n_examples=args.train_examples, seed=args.dataset_seed, **common),
+            LambdaTraceDataset(
+                n_examples=args.val_examples,
+                seed=args.dataset_seed + 100_000,
+                **{**common, "depth": val_depth},
+            ),
+        )
+    if args.task == "vm_trace":
+        common = {"depth": args.depth, "modulus": args.modulus}
+        return (
+            VMTraceDataset(n_examples=args.train_examples, seed=args.dataset_seed, **common),
+            VMTraceDataset(
+                n_examples=args.val_examples,
+                seed=args.dataset_seed + 100_000,
+                **{**common, "depth": val_depth},
+            ),
+        )
+    if args.task == "vm_step":
+        common = {"depth": args.depth, "modulus": args.modulus}
+        return (
+            VMStepDataset(n_examples=args.train_examples, seed=args.dataset_seed, **common),
+            VMStepDataset(
+                n_examples=args.val_examples,
+                seed=args.dataset_seed + 100_000,
+                **{**common, "depth": val_depth},
+            ),
+        )
+    if args.task == "vm_equivalence":
+        common = {"depth": args.depth, "modulus": args.modulus}
+        return (
+            VMEquivalenceDataset(n_examples=args.train_examples, seed=args.dataset_seed, **common),
+            VMEquivalenceDataset(n_examples=args.val_examples, seed=args.dataset_seed + 100_000, **{**common, "depth": val_depth}),
+        )
+    if args.task == "dfa_equivalence":
+        return (
+            DFAEquivalenceDataset(n_examples=args.train_examples, seed=args.dataset_seed, depth=args.depth),
+            DFAEquivalenceDataset(n_examples=args.val_examples, seed=args.dataset_seed + 100_000, depth=val_depth),
         )
     if args.task == "graph_alias":
         return build_graph_alias(args)

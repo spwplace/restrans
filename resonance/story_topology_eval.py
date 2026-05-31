@@ -328,6 +328,13 @@ def build_model(args: argparse.Namespace, condition: str, tokenizer: StoryTokeni
             "phase_update_mode": "mlp",
             "phase_condition_qk": "film",
         },
+        "phase_dynamic_qk_film_alibi": {
+            "use_phase_stream": True,
+            "use_resonance_bias": False,
+            "phase_update_mode": "mlp",
+            "phase_condition_qk": "film",
+            "attention_variant": "alibi",
+        },
         "resonance_dynamic_mlp": {
             "use_phase_stream": True,
             "use_resonance_bias": True,
@@ -377,6 +384,13 @@ def build_model(args: argparse.Namespace, condition: str, tokenizer: StoryTokeni
             "phase_condition_qk": "film",
             "relation_value_mode": "additive",
         },
+        "relation_value_qk_film_alibi": {
+            "use_phase_stream": True,
+            "use_resonance_bias": False,
+            "phase_condition_qk": "film",
+            "relation_value_mode": "additive",
+            "attention_variant": "alibi",
+        },
         "harmonic_relation_value": {
             "use_phase_stream": True,
             "use_resonance_bias": False,
@@ -404,6 +418,18 @@ def build_model(args: argparse.Namespace, condition: str, tokenizer: StoryTokeni
             "resonance_kernel": "bilinear",
             "n_structural_heads": 1,
             "structural_head_scale": 1.0,
+        },
+        "walkformer": {
+            "use_phase_stream": True,
+            "use_resonance_bias": True,
+            "resonance_kernel": "walk",
+            "walk_use_chiral": True,
+        },
+        "walkformer_no_chiral": {
+            "use_phase_stream": True,
+            "use_resonance_bias": True,
+            "resonance_kernel": "walk",
+            "walk_use_chiral": False,
         },
     }
     if base_condition not in variant_options:
