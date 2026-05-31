@@ -199,11 +199,20 @@ def make_config(args: argparse.Namespace, name: str, vocab_size: int, resonance:
 
 def configure_condition(config, condition: str):
     base = condition.removesuffix("_normalized")
-    if base == "phase_dynamic_qk_film":
+    if base in {"phase_dynamic_qk_film", "phase_dynamic_qk_film_alibi"}:
         config.use_phase_stream = True
         config.use_resonance_bias = False
         config.phase_update_mode = "mlp"
         config.phase_condition_qk = "film"
+        if base.endswith("_alibi"):
+            config.attention_variant = "alibi"
+    elif base in {"relation_value_qk_film", "relation_value_qk_film_alibi"}:
+        config.use_phase_stream = True
+        config.use_resonance_bias = False
+        config.phase_condition_qk = "film"
+        config.relation_value_mode = "additive"
+        if base.endswith("_alibi"):
+            config.attention_variant = "alibi"
     elif base == "phase_stream_only":
         config.use_phase_stream = True
         config.use_resonance_bias = False
@@ -423,6 +432,19 @@ def train_unified(args: argparse.Namespace) -> dict[str, Any]:
         })
 
     elapsed = time.time() - start_time
+    checkpoint_path = args.output_dir / "checkpoint.pt"
+    if args.save_checkpoint:
+        inverse_vocab = {v: k for k, v in tokenizer.vocab.items()}
+        torch.save({
+            "model_state_dict": model.state_dict(),
+            "config": config,
+            "tokenizer_vocab": tokenizer.vocab,
+            "tokenizer_inverse": inverse_vocab,
+            "condition": args.condition,
+            "seed": args.seed,
+            "history": history,
+        }, checkpoint_path)
+        print(f"Saved checkpoint to {checkpoint_path}")
     return {
         "condition": args.condition,
         "seed": args.seed,
@@ -455,6 +477,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--resonance_attn_weight", type=float, default=0.1)
     parser.add_argument("--lm_weight", type=float, default=1.0)
     parser.add_argument("--task_weight", type=float, default=1.0)
+    parser.add_argument("--save_checkpoint", action="store_true", help="Save model checkpoint at end of training")
 
     parser.add_argument("--lm_train_paths", nargs="+", default=[
         "data/processed/babylm_strict_small/train.jsonl",
