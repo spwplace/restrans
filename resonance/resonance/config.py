@@ -69,6 +69,10 @@ class ResonanceConfig:
     walk_use_chiral: bool = True
     walk_band: int = 8
     walk_use_phase_drive: bool = True
+    # Walkformer v1/v2 atom set switch.  "v1" keeps only the five original v1
+    # atoms (byte-stable v1 behaviour); "v2" enables all ten; a v2-atom name
+    # (bessel|coined|twohorn|powerlaw|learnedH) enables the v1 five plus that one.
+    walk_atom_set: str = "v1"
     # Phase embedding variant
     phase_embedding: str = "real"
     phase_embedding_rank: int = 8

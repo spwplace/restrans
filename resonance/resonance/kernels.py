@@ -451,13 +451,15 @@ class WalkKernel(ResonanceKernel):
             return [False] * len(self._v2_names)
         if s in ("v2", "all"):
             return [True] * len(self._v2_names)
-        wanted = {tok.strip() for tok in s.replace(",", " ").split() if tok.strip()}
-        unknown = wanted - set(self._v2_names)
+        canon = {name.lower(): name for name in self._v2_names}
+        wanted_raw = [tok.strip() for tok in s.replace(",", " ").split() if tok.strip()]
+        unknown = [tok for tok in wanted_raw if tok not in canon]
         if unknown:
             raise ValueError(
                 f"unknown walk v2 atom(s) {sorted(unknown)}; "
                 f"available: {list(self._v2_names)} (or 'v1'/'v2')"
             )
+        wanted = {canon[tok] for tok in wanted_raw}
         return [name in wanted for name in self._v2_names]
 
     def _offsets(self, seq_len: int, device, dtype) -> torch.Tensor:
@@ -537,8 +539,118 @@ class WalkKernel(ResonanceKernel):
         w_cheb = cheb * cheb_env
         atoms.append(w_cheb)
 
+        # === v2 atoms (indices 5..9) ============================================
+
+        d_long = d.round().long()  # exact integer offsets for table indexing
+
+        # --- Atom 5 (index 5): Bessel CTQW on Z — exact J_{i-j}(2τ) ---
+        # The genuine continuous-time quantum walk on the integer line.  Via the
+        # Jacobi-Anger generating function  e^{i x sinθ} = Σ_d J_d(x) e^{i d θ},
+        # the Bessel coefficients J_d(x) are exactly the Fourier coefficients of
+        # g(θ) = exp(i x sinθ).  Sampling θ on an N-point grid and taking the FFT
+        # of g recovers J_d(x) for d = 0..N-1 (and J_{-d} = (-1)^d J_d).  Using
+        # torch.fft makes the whole thing autograd-differentiable in τ.
+        #   Oscillatory with a ballistic light-cone front at d ≈ 2τ — contrast
+        #   the v1 heat atom (atom 1), which is classical Gaussian diffusion.
+        tau_b = F.softplus(self.log_tau_bessel) + 1e-4
+        n_fft = 1
+        target = max(self.bessel_fft_min, 4 * seq_len)
+        while n_fft < target:
+            n_fft *= 2
+        theta = torch.arange(n_fft, device=device, dtype=real_dtype) * (
+            2.0 * math.pi / n_fft
+        )
+        x_arg = 2.0 * tau_b
+        g = torch.exp(1j * (x_arg * torch.sin(theta)))  # [N], complex
+        bessel = (torch.fft.fft(g) / n_fft).real  # J_d(2τ) for d=0..N-1
+        # Index by |d| then apply the parity relation J_{-d} = (-1)^d J_d.  For
+        # d >= 0, J_d = (-1)^d J_{-d} too, so using |d| with the (-1)^|d|... no:
+        # J_d for d>=0 is bessel[d]; for d<0, J_d = (-1)^{|d|} J_{|d|}.
+        d_idx = d_long.abs().clamp(max=n_fft - 1)
+        parity = torch.where(
+            d_long < 0,
+            (-1.0) ** d_long.abs().to(real_dtype),
+            torch.ones_like(d, dtype=real_dtype),
+        )
+        w_bessel = bessel[d_idx] * parity  # [S, S]
+        atoms.append(w_bessel)
+
+        # --- Atom 6 (index 6): complex-coined directed walk (phase + direction) ---
+        # A phase-carrying directed walk that does NOT square-collapse to
+        # |amplitude|²: prior QW-transformers (CTQWformer / GQWformer) keep only
+        # the magnitude; here we carry phase AND direction into the bias.
+        #   bias(d) = Re( e^{i φ d} ) · envelope(d) · dir_gain(d)
+        # with a learnable coin angle φ, a local exponential envelope, and a
+        # learnable forward/backward asymmetry (look-back d>0 vs look-ahead d<0).
+        coined_decay = torch.exp(
+            -(F.softplus(self.log_coined_decay) + 1e-4) * d_abs
+        )
+        # Directional gain: sigmoid(asym) weights d>0, (1-·) weights d<0.
+        fwd = torch.sigmoid(self.coined_asym)
+        dir_gain = torch.where(d > 0, fwd, torch.where(d < 0, 1.0 - fwd, 0.5 * torch.ones_like(d)))
+        w_coined = torch.cos(self.coined_phase * d) * coined_decay * dir_gain
+        atoms.append(w_coined)
+
+        # --- Atom 7 (index 7): ballistic two-horn (DTQW signature) ---
+        # Discrete-time quantum walk transport: probability mass concentrates at
+        # d ≈ ±c (two outward "horns" racing apart at ±c·t), the opposite of the
+        # heat atom's single central peak.  Implemented as a symmetric pair of
+        # Gaussian bumps at ±speed with learnable speed and width.
+        speed = F.softplus(self.log_horn_speed) + 1e-3
+        horn_w = F.softplus(self.log_horn_width) + 1e-3
+        w_horn = torch.exp(-((d_abs - speed) ** 2) / (2.0 * horn_w * horn_w))
+        atoms.append(w_horn)
+
+        # --- Atom 8 (index 8): power-law / Lévy heavy tail ---
+        # Heavy-tailed (polynomial) long-range coupling 1 / (1 + |d|)^α with
+        # learnable α — a fractional-Laplacian (-Δ)^s style walk.  Contrast the
+        # heat / ALiBi exponential decay: this keeps non-negligible mass at large
+        # |d| (long-range), governed by a single learnable exponent.
+        alpha = F.softplus(self.log_alpha) + 1e-3
+        w_power = torch.pow(1.0 + d_abs, -alpha)
+        atoms.append(w_power)
+
+        # --- Atom 9 (index 9): learnable circulant Hermitian Hamiltonian ---
+        # Learn the walk's dispersion relation, constrained to the CIRCULANT
+        # (hence EQUITABLE) family.  We learn the low-frequency Fourier symbol of
+        # a circulant Hermitian generator H, build the full real symbol Ĥ of
+        # length S, propagate exp(-iτ_H Ĥ) in the Fourier basis, and read the
+        # per-offset bias as W[i,j] = Re( ifft(exp(-iτ_H Ĥ)) )[(i-j) mod S].
+        #   Learnable yet certified: it automatically inherits graphplay's
+        #   verified equitable-quotient / mixing semantics, unlike an
+        #   unconstrained learnable Laplacian.  Subsumes heat / wave / Bessel /
+        #   chiral as special spectral choices.
+        tau_h = F.softplus(self.log_tau_hamiltonian) + 1e-4
+        n_modes = min(self.h_symbol_modes, seq_len)
+        # Build a real, conjugate-symmetric circulant symbol Ĥ of length S by
+        # placing the learnable low-frequency values at k = 1..n_modes-1 and
+        # mirroring them to k = S-1..S-n_modes+1 (Ĥ_k = Ĥ_{S-k}); k=0 (DC) is the
+        # zeroth learnable value.  Symmetry in k makes the propagator kernel real.
+        k_axis = torch.arange(seq_len, device=device)
+        h_full = torch.zeros(seq_len, device=device, dtype=real_dtype)
+        h_full[0] = self.h_symbol[0]
+        for m in range(1, n_modes):
+            h_full = h_full + self.h_symbol[m] * (
+                (k_axis == m).to(real_dtype) + (k_axis == (seq_len - m)).to(real_dtype)
+            )
+        propagator = torch.exp(-1j * tau_h * h_full.to(torch.complex64))
+        kernel_offsets = torch.fft.ifft(propagator).real  # [S], indexed by offset mod S
+        off_mod = (d_long % seq_len).clamp(0, seq_len - 1)
+        w_hamiltonian = kernel_offsets[off_mod]  # [S, S]
+        atoms.append(w_hamiltonian)
+
         # --- Simplex mixture over atoms ---
         mix = F.softmax(self.mix_logits, dim=0)
+        # v1/v2 lock: zero the contribution of any disabled v2 atom (indices
+        # 5..9) and renormalize, exactly analogous to the chiral ablation.  In
+        # "v1" mode all five are zeroed so the kernel reduces to the v1 mixture.
+        v2_mask = torch.ones_like(mix)
+        for k, enabled in enumerate(self.v2_enabled):
+            if not enabled:
+                v2_mask[5 + k] = 0.0
+        if not v2_mask.all():
+            mix = mix * v2_mask
+            mix = mix / mix.sum().clamp(min=1e-8)
         if not self.use_chiral:
             # Force the chiral atom's mixture mass to zero and renormalize so the
             # ablation truly removes the U(1) atom (no leakage).

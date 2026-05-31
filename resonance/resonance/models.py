@@ -408,6 +408,7 @@ class ResonanceEmbedding(nn.Module):
             use_chiral=getattr(config, "walk_use_chiral", True),
             walk_band=getattr(config, "walk_band", 8),
             walk_use_phase_drive=getattr(config, "walk_use_phase_drive", True),
+            walk_atom_set=getattr(config, "walk_atom_set", "v1"),
         )
 
         # Store effective init values for attention module

@@ -431,6 +431,37 @@ def build_model(args: argparse.Namespace, condition: str, tokenizer: StoryTokeni
             "resonance_kernel": "walk",
             "walk_use_chiral": False,
         },
+        # --- walkformer v2 (10-atom) conditions -----------------------------
+        "walkformer_v2": {
+            "use_phase_stream": True,
+            "use_resonance_bias": True,
+            "resonance_kernel": "walk",
+            "walk_use_chiral": True,
+            "walk_atom_set": "v2",
+        },
+        # Per-atom ablation probes: v1 five + exactly one v2 atom, so each new
+        # atom's individual contribution can be read off.
+        "walkformer_bessel": {
+            "use_phase_stream": True,
+            "use_resonance_bias": True,
+            "resonance_kernel": "walk",
+            "walk_use_chiral": True,
+            "walk_atom_set": "bessel",
+        },
+        "walkformer_coined": {
+            "use_phase_stream": True,
+            "use_resonance_bias": True,
+            "resonance_kernel": "walk",
+            "walk_use_chiral": True,
+            "walk_atom_set": "coined",
+        },
+        "walkformer_learnedH": {
+            "use_phase_stream": True,
+            "use_resonance_bias": True,
+            "resonance_kernel": "walk",
+            "walk_use_chiral": True,
+            "walk_atom_set": "learnedH",
+        },
     }
     if base_condition not in variant_options:
         raise ValueError(f"unknown condition: {condition}")
