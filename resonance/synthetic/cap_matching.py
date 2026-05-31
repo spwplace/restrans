@@ -55,6 +55,7 @@ class CapMatchingExample:
     matchable: bool
     pattern: str
     cap_term: str
+    mode: str = "mixed"
 
 
 def const(name: str) -> Term:
@@ -81,6 +82,17 @@ def render(term: CapTerm) -> str:
     if not term.args:
         return term.name
     return f"{term.name} ( {' , '.join(render(arg) for arg in term.args)} )"
+
+
+def strip_caps_to_seed(term: CapTerm) -> CapTerm:
+    """Replace each Cap by its seed, preserving ordinary term/union shape."""
+    if isinstance(term, Cap):
+        return strip_caps_to_seed(term.seed)
+    if isinstance(term, UnionTerm):
+        return UnionTerm(tuple(strip_caps_to_seed(option) for option in term.options))
+    if not term.args:
+        return term
+    return Term(term.name, tuple(strip_caps_to_seed(arg) for arg in term.args), is_var=term.is_var)
 
 
 def term_depth(term: Term) -> int:
@@ -254,9 +266,84 @@ def negative_pair(rng: random.Random, depth: int) -> tuple[Term, CapTerm]:
     return fun("p", const("a"), const("b")), Cap(const("k"), ("g", "h"))
 
 
-def render_cap_matching_example(seed: int, graph_id: str, depth: int, positive: bool) -> CapMatchingExample:
+def mutate_pattern_symbol(rng: random.Random, pattern: Term) -> Term:
+    """Change one non-variable symbol while preserving arity where possible."""
+    if pattern.is_var:
+        return pattern
+    if pattern.args and rng.random() < 0.7:
+        children = list(pattern.args)
+        term_children = [i for i, child in enumerate(children) if isinstance(child, Term)]
+        if term_children:
+            index = rng.choice(term_children)
+            children[index] = mutate_pattern_symbol(rng, children[index])  # type: ignore[arg-type]
+            return Term(pattern.name, tuple(children), is_var=False)
+    if not pattern.args:
+        choices = [name for name in CONSTANTS if name != pattern.name]
+        return const(rng.choice(choices))
+    arity = len(pattern.args)
+    choices = [name for name, n_args in FUNCTIONS if n_args == arity and name != pattern.name]
+    if not choices:
+        choices = [name for name, _arity in FUNCTIONS if name != pattern.name]
+        name = rng.choice(choices)
+        target_arity = ARITY[name]
+        args = tuple(pattern.args[:target_arity])
+        while len(args) < target_arity:
+            args = args + (const(rng.choice(CONSTANTS)),)
+        return fun(name, *args)
+    return Term(rng.choice(choices), pattern.args, is_var=False)
+
+
+def negative_pair_hard(rng: random.Random, depth: int) -> tuple[Term, CapTerm]:
+    """Negative examples matched to the positive generator's surface statistics.
+
+    We first sample a cap and a ground member, mask it into a pattern as in the
+    positive generator, then minimally mutate the pattern until it no longer
+    matches the same cap.  This blocks the easiest random-negative shortcuts:
+    cap length, constructor frequency, and unrelated root-symbol mismatch.
+    """
+    for _ in range(1_000):
+        cap = random_cap(rng, depth)
+        target = sample_from_cap(rng, cap, depth=max(1, depth))
+        pattern = mask_target(rng, target, var_prob=0.25)
+        for _inner in range(16):
+            candidate = mutate_pattern_symbol(rng, pattern)
+            if candidate != pattern and not cap_match_exists(candidate, cap, max_depth=max(4, depth + 1)):
+                return candidate, cap
+    return negative_pair(rng, depth)
+
+
+def positive_pair_closure(rng: random.Random, depth: int) -> tuple[Term, CapTerm]:
+    """Positive pair whose match needs Cap closure, not only the seed terms."""
+    for _ in range(1_000):
+        cap = random_cap(rng, depth)
+        target = sample_from_cap(rng, cap, depth=max(2, depth))
+        pattern = mask_target(rng, target, var_prob=0.25)
+        seed_only = strip_caps_to_seed(cap)
+        if (
+            cap_match_exists(pattern, cap, max_depth=max(4, depth + 1))
+            and not cap_match_exists(pattern, seed_only, max_depth=max(4, depth + 1))
+        ):
+            return pattern, cap
+    return positive_pair(rng, depth)
+
+
+def render_cap_matching_example(
+    seed: int,
+    graph_id: str,
+    depth: int,
+    positive: bool,
+    *,
+    mode: str = "mixed",
+) -> CapMatchingExample:
     rng = random.Random(seed)
-    pattern, cap_term = positive_pair(rng, depth) if positive else negative_pair(rng, depth)
+    if mode == "mixed":
+        pattern, cap_term = positive_pair(rng, depth) if positive else negative_pair(rng, depth)
+    elif mode == "hard":
+        pattern, cap_term = positive_pair(rng, depth) if positive else negative_pair_hard(rng, depth)
+    elif mode == "closure":
+        pattern, cap_term = positive_pair_closure(rng, depth) if positive else negative_pair_hard(rng, depth)
+    else:
+        raise ValueError(f"unknown cap matching mode: {mode}")
     matchable = cap_match_exists(pattern, cap_term, max_depth=max(4, depth + 1))
     pattern_text = render(pattern)
     cap_text = render(cap_term)
@@ -270,19 +357,28 @@ def render_cap_matching_example(seed: int, graph_id: str, depth: int, positive: 
         matchable=matchable,
         pattern=pattern_text,
         cap_term=cap_text,
+        mode=mode,
     )
 
 
 class CapMatchingDataset(Dataset):
     """Balanced yes/no cap-matching examples."""
 
-    def __init__(self, *, n_examples: int = 512, seed: int = 0, depth: int = 4) -> None:
+    def __init__(
+        self,
+        *,
+        n_examples: int = 512,
+        seed: int = 0,
+        depth: int = 4,
+        mode: str = "mixed",
+    ) -> None:
         self.examples = [
             render_cap_matching_example(
                 seed=seed + idx,
                 graph_id=f"cap{idx}",
                 depth=depth,
                 positive=idx % 2 == 0,
+                mode=mode,
             )
             for idx in range(n_examples)
         ]
