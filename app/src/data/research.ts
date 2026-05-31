@@ -92,10 +92,10 @@ export const repoFacts = [
   { label: "Main caution", value: "relation-aware and dual-stream transformer prior art is substantial" },
   {
     label: "Latest matrix",
-    value: "20 architectural variants instantiate and train on the local tiny matrix; DeBERTa-lite baselines lead aggregate",
+    value: "posttraining/RLVR pilots now run on verifier-heavy lambda, VM, DFA, cap-matching, and protocol tasks",
   },
-  { label: "Best signal so far", value: "low-data BLiMP wh-island split plus unification task pockets, both still seed-limited" },
-  { label: "Main blocker", value: "matched baselines and medium-scale structure-first runs" },
+  { label: "Best signal so far", value: "low-data BLiMP wh-island split plus formal-task pockets, all still seed-limited" },
+  { label: "Main blocker", value: "showing that explicit verifier pressure makes the structural stream causally useful" },
   { label: "Repro style", value: "uv environment, scripted dataset fetches, pinned external cap-matcher source" },
   { label: "Compute targets", value: "local Apple MPS/CPU plus persvati AMD ROCm/CPU" },
 ];
@@ -528,6 +528,15 @@ export const architectureMatrixRows: ArchitectureMatrixRow[] = [
 
 export const evidenceRows: EvidenceRow[] = [
   {
+    experiment: "Structural posttraining pilot",
+    task: "Lambda traces, VM traces, DFA equivalence, cap matching, algebraic protocol closure",
+    standard: "standard_alibi under SFT + DPO/RLVR",
+    bestResonant: "phase_dynamic_qk_film_alibi and relation_value_qk_film_alibi are running",
+    interpretation:
+      "This is the current main branch. The question is whether verifiable rewards and trace/process tasks make the structural stream useful, not whether raw web pretraining wins immediately.",
+    status: "running",
+  },
+  {
     experiment: "Architecture matrix smoke",
     task: "Unification + ListOps + EquiBench tiny matrix",
     standard: "55.6% mean acc",
@@ -617,6 +626,30 @@ export const syntheticTasks: TaskRow[] = [
     whyItMatters:
       "Security-protocol notation provides structural dependencies that are not equivalent to local token prediction.",
     currentStatus: "Implemented and smoke-tested; needs richer adversarial negatives.",
+  },
+  {
+    name: "Lambda normal-form and trace tasks",
+    source: "Local simply typed lambda-calculus generator plus exact beta reducer",
+    signalTarget: "Behavioral equivalence by beta normal form, one-step validity, and whole-trace reduction validity",
+    whyItMatters:
+      "This is closest to the original idea: train against equivalence classes of programs and the proof/reduction paths connecting them.",
+    currentStatus: "Implemented, smoke-tested, and included in posttraining/RLVR pilots.",
+  },
+  {
+    name: "Stack VM trace and equivalence",
+    source: "Local executable stack-machine interpreter",
+    signalTarget: "Program execution traces and same-final-state behavioral equivalence",
+    whyItMatters:
+      "Adds a non-lambda machine semantics substrate with exact outcome and process rewards.",
+    currentStatus: "Implemented, smoke-tested, and included in posttraining/RLVR pilots.",
+  },
+  {
+    name: "DFA language equivalence",
+    source: "Local product-automaton verifier",
+    signalTarget: "Accepted-language equivalence under state renaming and transition perturbation",
+    whyItMatters:
+      "A standard behavioral-equivalence problem with no dependence on lambda syntax or natural language.",
+    currentStatus: "Implemented and smoke-tested; added to the posttraining runner for future launches.",
   },
   {
     name: "First-order term unification",
@@ -777,7 +810,7 @@ export const benchmarkTiers: BenchmarkTierRow[] = [
   {
     tier: "Tier B: main evidence",
     purpose: "Run matched 10M-30M comparisons on tasks where structure is necessary.",
-    tasks: "SLOG, COGS/CFQ, EquiBench/CETBench or local formal equivalence, LeanProgress.",
+    tasks: "SLOG, COGS/CFQ, EquiBench/CETBench, local formal equivalence, VM traces, DFA equivalence, LeanProgress.",
     decision: "Proceed if gains survive baselines and phase/residual causal tests.",
   },
   {
@@ -1191,6 +1224,12 @@ export const formalDataIdeas: IconItem[] = [
     icon: Waypoints,
     body:
       "Generate statements, walk proof/search spaces, and train contrastively over multiple proofs of the same judgment. This directly targets the topology of deduction rather than accidental syntax.",
+  },
+  {
+    title: "Verifier posttraining",
+    icon: SearchCheck,
+    body:
+      "Warm-start with supervised answers, then use DPO, exact expected reward, or GRPO-style updates against deterministic verifiers for reductions, traces, automata, protocols, and equivalence.",
   },
   {
     title: "Program equivalence",
