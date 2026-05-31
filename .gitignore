@@ -31,6 +31,7 @@ dist-ssr/
 # Resonance experiment outputs
 /resonance/checkpoints/
 /resonance/results/
+/outputs/
 
 # IDE / OS
 .vscode/
