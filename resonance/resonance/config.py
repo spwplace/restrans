@@ -64,6 +64,11 @@ class ResonanceConfig:
     kernel_learnable_gamma: bool = False
     kernel_rank: int | None = None
     kernel_temperature: float = 1.0
+    # Walk kernel (walkformer) hyperparameters
+    walk_atoms: int = 5
+    walk_use_chiral: bool = True
+    walk_band: int = 8
+    walk_use_phase_drive: bool = True
     # Phase embedding variant
     phase_embedding: str = "real"
     phase_embedding_rank: int = 8
@@ -83,6 +88,10 @@ class ResonanceConfig:
     structural_head_scale: float = 1.0
     relation_value_mode: str = "none"        # none | additive
     aux_phase_loss_weight: float = 0.0
+    # Optional ordinary positional/logit prior for resonance models.  This lets
+    # us test whether phase/QK conditioning is only losing because it lacks the
+    # strong addressing prior used by ALiBi baselines.
+    attention_variant: str = "standard"      # standard | alibi
 
 
 def count_params(config: StandardConfig | ResonanceConfig) -> int:

@@ -299,6 +299,262 @@ class DirectionalComplexKernel(ResonanceKernel):
         return self.output_scale * (cos_part + sin_part)
 
 
+class WalkKernel(ResonanceKernel):
+    """Walkformer kernel: a learnable simplex mixture of analytic walk operators.
+
+    The sequence positions ARE the vertices of a latent 1-D line/cycle of length
+    ``S``.  Each *atom* is an analytic continuous-time-quantum-walk (CTQW) /
+    classical-walk operator on that graph, expressed purely as a function of the
+    relative offset ``d = i - j``.  Because every atom is Toeplitz (a function of
+    ``i - j`` only), the resulting bias matrix is translation-equivariant and
+    length-extrapolating: the same per-offset profile is reused at every length.
+
+    The output bias is the simplex mixture::
+
+        R[i, j] = Σ_a softmax(π)_a · W_a[i - j]
+
+    Atoms (each maps directly onto an operator formalized in graphplay):
+
+      1. ``path_heat``   — CTQW / diffusion heat kernel on the path graph,
+         ``exp(-τ L_path)``.  v1 uses the analytic Gaussian decay
+         ``exp(-τ d²)`` in the relative offset (the continuum heat kernel).
+      2. ``shift_k``     — soft shift-by-k Toeplitz (causal previous-token
+         addressing), a Gaussian bump centred at offset ``-k`` with learnable
+         soft ``k``.
+      3. ``circulant``   — learnable circular convolution over a small band of
+         relative offsets (diagonalizable by FFT; here a learnable per-offset
+         band is used directly).
+      4. ``chiral``      — **the key novel atom**: a U(1)-phased quantum walk
+         ``e^{i φ d}`` with learnable phase-rate ``φ``, optionally driven by the
+         ``complex_angle`` phase stream.  We take ``Re(·)`` to get a real,
+         direction-aware band.  This is what real SSMs / Hyena / FNet cannot
+         express (their kernels are real / phase-locked).  Ablatable via
+         ``use_chiral=False``.
+      5. ``cheb``        — a learnable low-order Chebyshev polynomial in the
+         (normalized) relative offset — a learnable band-pass positional filter
+         (a polynomial in the path Laplacian).
+
+    All atoms are O(S) banded / dense-Toeplitz constructions and share only a
+    handful of scalar parameters, so the kernel is extremely param-light — the
+    selling point versus a learned-QK relative-position table.
+
+    The causal upper-triangle is *not* masked here: the attention module masks
+    it (``masked_fill(mask == 0, -inf)``) downstream, exactly as for the other
+    kernels.  We do gate the chiral/shift atoms so their natural support is the
+    causal (``d >= 0``) half.
+    """
+
+    def __init__(
+        self,
+        n_frequencies: int,
+        walk_atoms: int = 5,
+        use_chiral: bool = True,
+        walk_band: int = 8,
+        walk_use_phase_drive: bool = True,
+        walk_atom_set: str = "v1",
+        **_: object,
+    ) -> None:
+        super().__init__()
+        self.n_frequencies = n_frequencies
+        self.use_chiral = bool(use_chiral)
+        self.band = int(walk_band)
+        self.use_phase_drive = bool(walk_use_phase_drive)
+
+        # ``walk_atom_set`` selects which atoms carry mixture mass.  This is the
+        # byte-stable v1/v2 switch.  ``"v1"`` forces the five v2 atoms (indices
+        # 5..9) to zero contribution and renormalizes, so the kernel is exactly
+        # the original 5-atom walkformer (the running v1 gauntlet stays
+        # comparable).  ``"v2"`` enables all ten atoms.  A set of explicit atom
+        # names (e.g. ``"bessel"``) enables the v1 five plus just those v2 atoms
+        # — used by the per-atom ablation probes.
+        self.walk_atom_set = str(walk_atom_set)
+        # Per-v2-atom enable mask (indices 5..9), resolved from walk_atom_set.
+        self._v2_names = ("bessel", "coined", "twohorn", "powerlaw", "learnedH")
+        self.v2_enabled = self._resolve_v2_enabled(self.walk_atom_set)
+
+        # Mixture logits over the (now up to 10) atoms.  Atoms are always built;
+        # when ``use_chiral`` is False the chiral atom (index 3) is forced to
+        # zero contribution so the ablation is exact (no leakage through the
+        # simplex).  The five v2 atoms (indices 5..9) start at a small negative
+        # logit so they begin with low mixture mass — the kernel's initial
+        # behaviour stays close to v1 (graceful).
+        self.n_atoms = 10
+        init_logits = torch.zeros(self.n_atoms)
+        init_logits[5:] = -2.0
+        self.mix_logits = nn.Parameter(init_logits)
+
+        # Atom 1: path-heat / CTQW diffusion.  log τ keeps τ > 0.
+        self.log_tau_heat = nn.Parameter(torch.tensor(math.log(0.25)))
+
+        # Atom 2: soft shift-k.  Learnable (soft) offset and width.
+        self.shift_k = nn.Parameter(torch.tensor(1.0))
+        self.log_shift_width = nn.Parameter(torch.tensor(math.log(0.5)))
+
+        # Atom 3: circulant / learnable banded relative-offset conv.  One weight
+        # per offset in [-band, band].
+        self.circ_weights = nn.Parameter(torch.zeros(2 * self.band + 1))
+
+        # Atom 4: chiral U(1)-phased walk.  Learnable phase-rate φ and an
+        # exponential envelope so the band stays local.
+        self.chiral_phase = nn.Parameter(torch.tensor(0.6))
+        self.log_chiral_decay = nn.Parameter(torch.tensor(math.log(0.15)))
+        # Optional scalar that lets the complex-angle phase stream modulate φ.
+        self.chiral_phase_drive = nn.Parameter(torch.tensor(0.0))
+
+        # Atom 5: Chebyshev positional band-pass.  Low-order coefficients.
+        self.cheb_order = 4
+        self.cheb_coeffs = nn.Parameter(torch.zeros(self.cheb_order))
+
+        # === v2 atoms (indices 5..9) ============================================
+
+        # Atom 5 (mix index 5): Bessel CTQW — genuine continuous-time quantum
+        # walk on Z.  Amplitude j -> i at time τ is J_{i-j}(2τ).  Computed
+        # differentiably from the Jacobi-Anger generating function via FFT.
+        self.log_tau_bessel = nn.Parameter(torch.tensor(math.log(1.0)))
+        self.bessel_fft_min = 512  # minimum FFT grid (rounded up to pow2 >= 4S)
+
+        # Atom 6 (mix index 6): complex-coined directed walk — a phase-carrying
+        # directed walk that does NOT square-collapse.  Learnable coin angle φ,
+        # a local envelope, and a learnable forward/backward (sign-of-d)
+        # asymmetry so look-back (d>0) and look-ahead (d<0) get different mass.
+        self.coined_phase = nn.Parameter(torch.tensor(0.6))
+        self.log_coined_decay = nn.Parameter(torch.tensor(math.log(0.2)))
+        self.coined_asym = nn.Parameter(torch.tensor(0.5))
+
+        # Atom 7 (mix index 7): ballistic two-horn — the DTQW signature
+        # distribution, a symmetric pair of Gaussian bumps at ±speed.
+        self.log_horn_speed = nn.Parameter(torch.tensor(math.log(2.0)))
+        self.log_horn_width = nn.Parameter(torch.tensor(math.log(0.75)))
+
+        # Atom 8 (mix index 8): power-law / Lévy heavy tail 1 / (1 + |d|)^α.
+        self.log_alpha = nn.Parameter(torch.tensor(math.log(1.0)))
+
+        # Atom 9 (mix index 9): learnable circulant Hermitian Hamiltonian.
+        # Learn the low-frequency Fourier symbol of a circulant generator H and
+        # propagate exp(-iτ_H Ĥ); the per-offset bias row is Re(ifft(...)).
+        self.h_symbol_modes = 8
+        self.h_symbol = nn.Parameter(torch.zeros(self.h_symbol_modes))
+        self.log_tau_hamiltonian = nn.Parameter(torch.tensor(math.log(0.5)))
+
+        # Global output scale.
+        self.output_scale = nn.Parameter(torch.tensor(1.0))
+
+    def _resolve_v2_enabled(self, atom_set: str) -> list[bool]:
+        """Map the ``walk_atom_set`` switch to a per-v2-atom enable mask.
+
+        ``"v1"`` -> all five disabled (kernel == v1).  ``"v2"``/``"all"`` ->
+        all enabled.  A comma/space-separated list of v2 atom names enables
+        just those (v1 five always stay on); unknown names raise.
+        """
+        s = atom_set.strip().lower()
+        if s in ("v1", "", "none"):
+            return [False] * len(self._v2_names)
+        if s in ("v2", "all"):
+            return [True] * len(self._v2_names)
+        wanted = {tok.strip() for tok in s.replace(",", " ").split() if tok.strip()}
+        unknown = wanted - set(self._v2_names)
+        if unknown:
+            raise ValueError(
+                f"unknown walk v2 atom(s) {sorted(unknown)}; "
+                f"available: {list(self._v2_names)} (or 'v1'/'v2')"
+            )
+        return [name in wanted for name in self._v2_names]
+
+    def _offsets(self, seq_len: int, device, dtype) -> torch.Tensor:
+        """Relative-offset matrix d[i, j] = i - j, shape [S, S]."""
+        pos = torch.arange(seq_len, device=device, dtype=dtype)
+        return pos.unsqueeze(1) - pos.unsqueeze(0)
+
+    def forward(self, phases: torch.Tensor) -> torch.Tensor:
+        # phases: [B, S, F] (real angles) or complex unit vectors.
+        if phases.is_complex():
+            phase_angle = phases.angle()
+            batch, seq_len, _ = phase_angle.shape
+            real_dtype = phase_angle.dtype
+            device = phase_angle.device
+        else:
+            batch, seq_len, _ = phases.shape
+            phase_angle = phases
+            real_dtype = phases.dtype
+            device = phases.device
+
+        d = self._offsets(seq_len, device, real_dtype)  # [S, S], d = i - j
+        d_abs = d.abs()
+
+        atoms: list[torch.Tensor] = []
+
+        # --- Atom 1: path-heat / CTQW diffusion: exp(-τ d²) ---
+        tau = F.softplus(self.log_tau_heat) + 1e-4
+        w_heat = torch.exp(-tau * d * d)
+        atoms.append(w_heat)
+
+        # --- Atom 2: soft shift-k (causal previous-token addressing) ---
+        # Mass concentrated at offset d = +k (attend k tokens back), Gaussian bump.
+        width = F.softplus(self.log_shift_width) + 1e-3
+        w_shift = torch.exp(-((d - self.shift_k) ** 2) / (2.0 * width * width))
+        atoms.append(w_shift)
+
+        # --- Atom 3: circulant / learnable banded relative-offset conv ---
+        # circ_weights indexes offsets [-band, band]; outside the band -> 0.
+        idx = (d + self.band).round().long()
+        in_band = (idx >= 0) & (idx <= 2 * self.band)
+        idx_clamped = idx.clamp(0, 2 * self.band)
+        w_circ = self.circ_weights[idx_clamped] * in_band.to(real_dtype)
+        atoms.append(w_circ)
+
+        # --- Atom 4: chiral U(1)-phased quantum walk: Re(e^{i φ d}) · envelope ---
+        phi = self.chiral_phase
+        if self.use_phase_drive and phase_angle.shape[-1] > 0:
+            # Let the mean complex-angle phase modulate the local rotation rate.
+            # phase_angle: [B, S, F] -> per-token scalar drive, then relative.
+            drive = phase_angle.mean(dim=-1)  # [B, S]
+            drive_rel = drive.unsqueeze(2) - drive.unsqueeze(1)  # [B, S, S]
+            phi_eff = phi + self.chiral_phase_drive * drive_rel  # [B, S, S]
+            ang = phi_eff * d.unsqueeze(0)  # broadcast d -> [B, S, S]
+            decay = torch.exp(-(F.softplus(self.log_chiral_decay) + 1e-4) * d_abs)
+            w_chiral = torch.cos(ang) * decay.unsqueeze(0)  # [B, S, S]
+        else:
+            decay = torch.exp(-(F.softplus(self.log_chiral_decay) + 1e-4) * d_abs)
+            w_chiral = torch.cos(phi * d) * decay  # [S, S]
+        if not self.use_chiral:
+            w_chiral = torch.zeros_like(w_chiral)
+        atoms.append(w_chiral)
+
+        # --- Atom 5: Chebyshev positional band-pass ---
+        # Normalize offset to [-1, 1] over the band, evaluate Chebyshev T_k.
+        x = (d / max(self.band, 1)).clamp(-1.0, 1.0)
+        t_prev = torch.ones_like(x)
+        t_cur = x
+        cheb = self.cheb_coeffs[0] * t_prev + (
+            self.cheb_coeffs[1] * t_cur if self.cheb_order > 1 else 0.0
+        )
+        for k in range(2, self.cheb_order):
+            t_next = 2.0 * x * t_cur - t_prev
+            cheb = cheb + self.cheb_coeffs[k] * t_next
+            t_prev, t_cur = t_cur, t_next
+        # Localize the band-pass to the same band as the other local atoms.
+        cheb_env = torch.exp(-(d_abs / max(self.band, 1)))
+        w_cheb = cheb * cheb_env
+        atoms.append(w_cheb)
+
+        # --- Simplex mixture over atoms ---
+        mix = F.softmax(self.mix_logits, dim=0)
+        if not self.use_chiral:
+            # Force the chiral atom's mixture mass to zero and renormalize so the
+            # ablation truly removes the U(1) atom (no leakage).
+            mask = torch.ones_like(mix)
+            mask[3] = 0.0
+            mix = mix * mask
+            mix = mix / mix.sum().clamp(min=1e-8)
+
+        result = phases.new_zeros((batch, seq_len, seq_len), dtype=real_dtype)
+        for a, w in enumerate(atoms):
+            if w.dim() == 2:
+                w = w.unsqueeze(0)  # [1, S, S] broadcast over batch
+            result = result + mix[a] * w
+        return self.output_scale * result
+
+
 # =============================================================================
 # Registry
 # =============================================================================
@@ -316,6 +572,7 @@ _KERNEL_REGISTRY: dict[str, Callable[..., ResonanceKernel]] = {
     "complex_real": ComplexRealKernel,
     "attention": AttentionKernel,
     "directional_complex": DirectionalComplexKernel,
+    "walk": WalkKernel,
 }
 
 

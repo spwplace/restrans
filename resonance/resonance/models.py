@@ -404,6 +404,10 @@ class ResonanceEmbedding(nn.Module):
             learnable_gamma=config.kernel_learnable_gamma,
             rank=config.kernel_rank,
             temperature=config.kernel_temperature,
+            walk_atoms=getattr(config, "walk_atoms", 5),
+            use_chiral=getattr(config, "walk_use_chiral", True),
+            walk_band=getattr(config, "walk_band", 8),
+            walk_use_phase_drive=getattr(config, "walk_use_phase_drive", True),
         )
 
         # Store effective init values for attention module
@@ -545,6 +549,7 @@ class ResonanceAttention(nn.Module):
         self.n_heads = config.n_heads
         self.head_dim = config.embed_dim // config.n_heads
         self.scale = self.head_dim**-0.5
+        self.attention_variant = getattr(config, "attention_variant", "standard")
 
         # Apply preset for effective attention weight
         _, attn_weight, _, norm_res, center_res = _preset_values(config, preset)
@@ -565,6 +570,13 @@ class ResonanceAttention(nn.Module):
         else:
             self.register_parameter("structural_head_weight", None)
         self.dropout = nn.Dropout(config.dropout)
+        if self.attention_variant == "alibi":
+            slopes = StandardAttention._build_alibi_slopes(config.n_heads)
+            self.register_buffer("alibi_slopes", slopes, persistent=False)
+        elif self.attention_variant == "standard":
+            self.register_buffer("alibi_slopes", torch.empty(0), persistent=False)
+        else:
+            raise ValueError(f"unknown resonance attention_variant: {self.attention_variant}")
 
         self.relation_value_mode = config.relation_value_mode
         if self.relation_value_mode == "additive":
@@ -671,6 +683,13 @@ class ResonanceAttention(nn.Module):
             k = k * (1.0 + k_gamma) + k_beta
 
         attn = torch.matmul(q, k.transpose(-2, -1)) * self.scale
+        if self.attention_variant == "alibi":
+            positions = torch.arange(seq_len, device=x.device)
+            distance = (positions[:, None] - positions[None, :]).clamp(min=0).to(attn.dtype)
+            slopes = self.alibi_slopes.to(device=x.device, dtype=attn.dtype).view(
+                1, self.n_heads, 1, 1
+            )
+            attn = attn - slopes * distance.view(1, 1, seq_len, seq_len)
         prepared_resonance: torch.Tensor | None = None
 
         if self.n_structural_heads > 0:
